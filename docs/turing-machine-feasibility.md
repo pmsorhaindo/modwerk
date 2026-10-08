@@ -464,15 +464,16 @@ Integration with quantizer is the target, reached incrementally: each milestone 
 
 Found and proven under the ColdFire emulator with a patched scratch image. Details, method and limits are in §7. Not yet done: the same detour through the real octabam build (`build_bus.py` with a `Detour` and `stock_guard`), and the ARP, NOTE-lock, MIDI-IN and Part-change cases listed in §7.
 
-### M1: v0.1 (scale stage S0): one track, fixed length 16, note only
+### M1: prototype ✅ (emulator, 8 October 2026)
 
-- `sdk/octabam/modules/turing-machine/` from `npm run module:new -- turing-machine --kind coldfire --author <login>`. C engine compiled to checked-in assembly the way Euclid's `generate_control.py` does it, plus a hook adapter.
-- One MIDI track (TURING MODE OFF/T1..T8), LENGTH fixed at 16, LOCK on a SEQUENCER row, chromatic LOW/SPAN mapping.
-- Transport by edge-detecting the PLAYING word; note-off bookkeeping on STOP, Part change and pattern change.
-- No `requires`/`conflicts`; project-level settings with clamps at boot.
-- Gates: a `verify_turing.py` that runs the port with `--midi-out` and checks (a) LOCK 127 repeats a 16-note phrase exactly, (b) LOCK 64 changes it, (c) every note-on has its note-off, (d) Turing OFF output is byte-identical to stock.
+Staged in [`sdk/drafts/turing-machine/`](../sdk/drafts/turing-machine/README.md): a module folder under `sdk/octabam/modules/` must already carry full publication qualification, so the prototype lives in drafts until M2. What was built, and where it differs from the plan above:
 
-**Scope:** one DRAM unit, one detour, a `TableGrow` for 2–4 rows, one gate. This is the smallest module that proves the hook and the live freeze behaviour.
+- **Engine and hook:** `turing.c` (compiled to the checked-in `turing.s` by `generate.py`, as Euclid does) and `hooks.s`, one DRAM unit, one guarded detour at `0x4009fb2e`. A 16-bit register per track advances on chord slot 0 of each firing trig. Notes start at the trig's own NOTE and lift 0–24 semitones, and all four chord slots move together.
+- **Controls moved to PROJECT > CONTROL > MIDI SEQUENCER.** Growing the SEQUENCER tables, as planned, would have made the ledger refuse Turing beside Scale Quantizer: two modules may not grow one stock table. The MIDI SEQUENCER page has its own label, getter and setter tables (one row, CC DIRECT CONNECT), already indexes rows by scroll offset and shows four. Growing those three tables and raising the row count from 1 to 3 adds TURING TRACK and TURING LOCK with no draw detour.
+- **Settings in battery RAM** (`0x100b14e8..ea`, with a check byte), like CC DIRECT CONNECT on the same page. Project-file lines would need quantizer's project loader and writer sites. No transport hook: the register only moves on trigs, and the stock note-off releases whatever was sent.
+- **Gate:** `verify.py` drives the emulated panel, makes its own fixture and reads the MIDI OUT bytes queued into the UART0 ring through a write watch. 15 checks pass on the module alone and beside Scale Quantizer, Euclid and CC Map. With TURING TRACK OFF, MIDI OUT matched stock byte for byte.
+
+Results and limits are in the draft's TESTING.md. Not yet done: project or Part persistence, more than one track, ARP/locks/MIDI IN, timing, the browser builder, hardware.
 
 ### M2: v0.1 release quality (still S0)
 
@@ -503,7 +504,7 @@ Found and proven under the ColdFire emulator with a patched scratch image. Detai
 | Milestone | Scale stage | Touches | Main risk |
 |---|---|---|---|
 | M0 ✅ | n/a | Emulator tracing, one detour | Done: hook at `0x4009fb2e` proven on a patched image |
-| M1 | S0 | New module folder, one DRAM unit, one detour, SEQUENCER rows, one gate | Note-off pairing |
+| M1 ✅ | S0 | Draft module, one DRAM unit, one detour, MIDI SEQUENCER rows, one gate | Done in the emulator; note-offs paired |
 | M2 | S0 | Docs, media, perf record, native comparison, hardware report | Menu-space refusal beside the crowded set |
 | M3 | S1 → S2 | Turing unit, then a ROM stub + `defsyms` fallback, possibly `build_bus.py` and `src/engine/` | Shared-build change; pinned-address contract |
 | M4 | S3 | Stock MIDI page (owner-approved), persistence research | Stock-flow change; no per-Part precedent |
