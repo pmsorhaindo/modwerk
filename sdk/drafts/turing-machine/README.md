@@ -58,7 +58,7 @@ note path runs its stock instructions; MIDI OUT matched stock byte for byte in t
 Limitations of this prototype:
 
 - One track at a time, a fixed 16-step loop, chromatic notes only. Scale stages are planned (study, section 2.3).
-- Settings are global, not saved with a project or Part. The register is runtime state: it restarts from the same seed after every boot, so the first phrase is always the same.
+- Settings are global, not saved with a project or Part. The register is runtime state: it restarts from the same seed after every boot, so the first phrase is always the same. A different first phrase per boot is planned for M2.
 - MIDI Scenes builds only on its own, so the two cannot be combined.
 - Not tested: arpeggiator, NOTE parameter locks, incoming MIDI notes, live recording, Part or pattern changes while playing, a project reload, timing under load, hardware.
 

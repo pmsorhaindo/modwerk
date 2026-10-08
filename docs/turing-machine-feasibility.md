@@ -478,6 +478,12 @@ Results and limits are in the draft's TESTING.md. Not yet done: project or Part 
 ### M2: v0.1 release quality (still S0)
 
 - LENGTH 2–16; all eight MIDI tracks (one register per track, a shared enable mask).
+- **A different first phrase after every boot** (requested 8 October 2026). M1 seeds each track's register from a fixed constant, so the first phrase repeats across boots. Candidates, to be measured before choosing:
+  - keep the generator state in battery RAM and carry it across power cycles, as the settings already are;
+  - mix in an entropy source at the first trig, such as a free-running timer or the time PLAY was pressed;
+  - read the battery-backed clock at boot.
+
+  Whichever is used, the emulator gate needs a fixed seed it can set, so its checks stay repeatable.
 - Everything §4 lists: README with full message map and tutorial, TESTING.md, screenshots via `scripts/capture-module-ui.py`, thumbnail, `evidence/performance.json`, `module:verify` against native, release notes.
 - Multi-instance and persistence checks from `ADD_A_MODULE.md` (different tracks with different settings; project save/load/reload; reboot on a unit, recorded separately from emulator results).
 - Hardware report from a real unit. Michael can supply this. Untested items stay "not tested".
