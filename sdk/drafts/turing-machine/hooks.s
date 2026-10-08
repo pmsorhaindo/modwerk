@@ -21,8 +21,10 @@ tm_note_hook:
         jmp     0x4009fb34
 
 | Explicitly initialized, loader-owned DRAM: a DRAM unit's .bss is never
-| cleared. The C's static assertion checks the size.
+| cleared. The C's static assertions check the sizes.
         .balign 4
-        .global tm_states
+        .global tm_states, tm_globals
 tm_states:
         .zero   64
+tm_globals:
+        .zero   8
