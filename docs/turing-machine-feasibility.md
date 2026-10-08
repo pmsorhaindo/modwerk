@@ -3,11 +3,12 @@
 **Date:** 8 October 2026  
 **Requester:** Michael (pmsorhaindo)  
 **Status:** Feasibility analysis complete; implementation not started  
-**Revision 2 (8 October 2026):** quantizer integration is the target, reached in stages (§2.3, §5). Corrects revision 1's conflict analysis (§3.1), frame timing (§1.4) and replaces day estimates with technical scope (§5).
+**Revision 2 (8 October 2026):** quantizer integration is the target, reached in stages (§2.3, §5). Corrects revision 1's conflict analysis (§3.1), frame timing (§1.4) and replaces day estimates with technical scope (§5).  
+**Revision 3 (8 October 2026):** M0 done in the emulator. The MIDI-track note hook is found and proven with a patched scratch image (§7). The design sections are updated to match.
 
 ## Executive Summary
 
-A Turing machine sequencer mode for Octatrack MIDI tracks is **feasible in principle** with the existing module architecture, but **no module in this repository yet generates or transforms MIDI notes** (`docs/module-guides/midi-usb.md`, "MIDI generators and MIDI effects"), so the MIDI-track trig/note-out hook has no worked example and must be located first. The cleanest design is a **ColdFire-only module** (`Kind.CF_PATCH`, `category: midi-usb`, `compatibility.location: MIDI tracks`) that hooks the point where the sequencer emits a MIDI track's note, following Euclid's transport/timing pattern.
+A Turing machine sequencer mode for Octatrack MIDI tracks is **feasible**. No module in this repository yet generates or transforms MIDI notes (`docs/module-guides/midi-usb.md`), so the hook had no worked example. M0 has now located it under the ColdFire emulator: a 6-byte detour at `0x4009fb2e`, inside the stock MIDI-track note-on loop, where the four resolved chord notes of a firing trig sit in a stack array before the track's TRAN is added and the note is sent. A patched scratch image transposed the notes there and MIDI OUT matched stock byte for byte apart from the moved notes, note-offs included (§7). The cleanest design is a **ColdFire-only module** (`Kind.CF_PATCH`, `category: midi-usb`, `compatibility.location: MIDI tracks`) that hooks the point where the sequencer emits a MIDI track's note, following Euclid's transport/timing pattern.
 
 **Recommended approach:** Per-MIDI-track state with a probability control, loop length, note range/scale controls, and output routing (note/CC/velocity). The module would hook the MIDI trig execution path to override the trig's note, and expose controls first as project-level SEQUENCER rows (quantizer's SCALE/ROOT/GLIDE pattern), later on a per-track page.
 
@@ -80,7 +81,7 @@ From the modules examined:
 | PLAY transport start | `0x4009c3d4`, `0x4009c4d4` | Euclid (both paths) | Reset timing state |
 | Project file load/save | Multiple | Quantizer, MIDI Scenes | Custom data persistence |
 
-**Key finding:** There is **no documented "MIDI trig execution" hook** in the examined modules. The quantizer intercepts *user input* (keyboard, knobs), not sequencer trig playback. MIDI Scenes works at the parameter level. To generate or override sequencer MIDI output, we need to find or create a hook at the **MIDI trig processing / note output stage**.
+**Key finding:** No examined module or firmware document (including upstream octabam's `docs/firmware/MIDI.md`) covers MIDI-track note *output*. Quantizer intercepts user input, and MIDI Scenes works at the parameter level. M0 found the output hook by tracing: the MIDI-track note-on chord loop at `0x4009fb2e` (§2.2, §7).
 
 ### 1.4 Where Code Runs
 
@@ -136,13 +137,12 @@ From the request:
 
 **Required hooks:**
 
-1. **MIDI trig execution hook** (new; not yet identified)
-   - **Where:** At the point where the sequencer processes a MIDI track trig and prepares to send a note
-   - **Action:** Read Turing machine state, compute next note, override/supplement the trig's note value
-   - **Challenge:** This hook point needs to be located in the firmware. Likely near:
-     - Sequencer trig processing (`0x4009...` range based on Euclid's PLAY hooks)
-     - MIDI note output preparation
-   - **Fallback:** If direct trig override is not feasible, could use a **post-trig event hook** similar to how Euclid publishes after scene/LFO processing
+1. **MIDI-track note hook (found in M0, §7)**: `0x4009fb2e`, 6 bytes `1212 7101 76ff` (`move.b (%a2),%d1; mvs.b %d1,%d0; moveq #-1,%d3`), SHA-256 `c51d1ea289bd31b3ae87a587ac9c17dd9a97ffebbe73d44bb72a3605d978845a`.
+   - It is the head of the chord loop inside the stock MIDI sequencer routine at `0x4009f794` (`linkw %fp,#-104`). `d7` = track (0–7), `d4` = chord slot (0 = NOTE, 1–3 = NOT2–NOT4), `a2` → the slot's resolved note byte in a stack array at `%fp@(-4)` (`-1` = no note), `a5` → the track's record. Measured: one pass per slot per firing trig per track.
+   - The loop is re-entered only by `bne.w 0x4009fb2e` at `0x4009fd36`; nothing branches into the displaced bytes, and none of them is PC-relative.
+   - After the hook, stock adds `TRAN` (`a5@(556)` − 64) and a per-track offset (`0x46c7a124[t]`), optionally remaps the pitch class through `0x400d80a0` (driven by a byte at `+49` of another per-track record; what that setting is, is unverified), suppresses a note already sounding on the channel (`0x46c78152[chan·128 + note]`), sends `9n note vel` through the 3-byte queue `0x40010bc8`, and records the sent status and note at `0x46c77a16/0x46c77a1a + 32·t (+8·slot)`. The note-off path (`0x4009f8a2`) sends from that record.
+   - **Action:** at `d4 == 0` on an enabled track, replace NOTE with the generated note and shift NOT2–NOT4 by the same interval (dropping any that leave 0–127). Then run the displaced instructions and `jmp 0x4009fb34`. `d0` is free (the displaced `mvs.b` overwrites it).
+   - **Fallback no longer needed** for v0.1.
 
 2. **Transport (PLAY/STOP)**: do **not** reuse Euclid's sites
    - Euclid already detours both PLAY paths (`0x4009c3d4`, `0x4009c4d4`) and the post-scene/LFO frame site (`0x4000d562`). The build refuses two modules claiming one detour site, so reusing them would make Turing and Euclid mutually exclusive.
@@ -274,8 +274,8 @@ Following the module guides:
 
 ### 2.5 Open Questions for Maintainer
 
-1. **MIDI trig execution hook location:**  
-   Where exactly does the sequencer process MIDI trigs and prepare note output? Is there an existing hook point, or does one need to be added to the firmware RE knowledge base?
+1. **The note hook at `0x4009fb2e` (found in M0):**  
+   Should it be recorded in octabam's firmware notes (`docs/firmware/MIDI.md` upstream) when the module lands, with the trace method of §7?
 
 2. **Optional or required scale provider (stage S2):**  
    Should Turing link to quantizer's `SCALE_AT` optionally (symbol with fallback, preferred) or declare `requires` quantizer? If optional, is extending the `defsyms` fallback to point at the module's own routine acceptable in `build_bus.py` and `src/engine/`?
@@ -318,7 +318,7 @@ Following the module guides:
 - **Project compatibility:** v0.1 adds only project-level settings (battery RAM + skipped `#` project-file lines, quantizer's pattern); old projects load with Turing OFF, and a project saved with Turing loads on stock (the stock loader skips the lines)
 
 **Potential issues:**
-- **Stuck notes (the main risk).** If the hook replaces a trig's note-on, the stock note-off at the end of the trig's LEN must carry the *replaced* note, or the receiver holds the original forever. The hook has to sit where note-on and note-off share one note value (the trig's resolved NOTE), or the module must remember the note it emitted per track and voice and rewrite the matching note-off. The same applies to the chord notes NOT2–NOT4 and to ARP, which are out of scope for v0.1 and should be passed through untouched. The midi-usb checklist's "every note-on gets its note-off" items (stop, Part/pattern change, bypass, removal) are the acceptance tests.
+- **Stuck notes: largely retired by M0.** The stock note-off is sent from the note recorded *after* the hook ran (`0x46c77a1a + 32·t`), so a note replaced at `0x4009fb2e` is the one that is switched off. The spike confirmed matching `9n kk 00` for every replaced note. One trap remains, also measured: NOT2–NOT4 are precomputed from the original NOTE, and a slot equal to NOTE is dropped as a duplicate. Replacing NOTE alone made the old note sound as an extra voice. The module must shift every chord slot by the same interval. The midi-usb checklist items (stop mid-note, Part/pattern change, bypass, removal) still need their own runs.
 - MIDI output flood → **Mitigation:** the register advances only on the track's own trigs; at most one note out per trig, never free-running.
 - Battery-RAM bytes → quantizer uses `0x100b14ec..ee` from the padding `0x100b14e2..ef`. Whether the remaining padding bytes are free must be measured as quantizer did (no absolute reference in the OS) before Turing claims any; clamp them at boot like `qz_boot`.
 
@@ -460,17 +460,9 @@ Integration with quantizer is the target, reached incrementally: each milestone 
 
 **Before M0:** the midi-usb guide asks contributors to "agree the design with the owner before you spend long on one that has no precedent". This report is the basis for that conversation (§2.5).
 
-### M0: Locate the MIDI-track note hook (research spike)
+### M0: Locate the MIDI-track note hook ✅ (emulator, 8 October 2026)
 
-**Goal:** One stock address where a MIDI track's trig resolves its NOTE and both the note-on and its later note-off read that value.
-
-- Build a test project with `sdk/octabam/tools/hw/ot_spec.py`: one MIDI track, channel set, four trigs, one with a NOTE lock.
-- Run it under the ColdFire port with `--sequencer --frames N --midi-out <file>`. `--midi-out` writes UART0's transmit bytes, so the note-ons and note-offs can be read without hardware. Use `--pc-ring` / `--watch-pc` / `--watch-mem` to walk back from the UART transmit to the routine that chose the note byte.
-- Prove the site with a pass-through detour (displaced instructions only), then with a fixed transpose (+12) and check in the `--midi-out` capture that every note-off matches its note-on.
-- Record the site and its `stock_guard` (address, length, SHA-256). Check it against every claimed site in the ledger (`make modules`); MIDI Scenes' regions do not matter, since it is standalone-only.
-
-**Scope:** emulator tracing and one 6-byte detour; no module code yet. **Needs:** the native toolchain image and the contributor's own 1.40C update file. Neither is in this environment, which is why no spike was run for this study.  
-**Exit:** a site that passes the note-off check, or a documented negative result and a fallback (rewriting the track's live NOTE value before the sequencer reads it, as Euclid publishes FREQ).
+Found and proven under the ColdFire emulator with a patched scratch image. Details, method and limits are in §7. Not yet done: the same detour through the real octabam build (`build_bus.py` with a `Detour` and `stock_guard`), and the ARP, NOTE-lock, MIDI-IN and Part-change cases listed in §7.
 
 ### M1: v0.1 (scale stage S0): one track, fixed length 16, note only
 
@@ -510,7 +502,7 @@ Integration with quantizer is the target, reached incrementally: each milestone 
 
 | Milestone | Scale stage | Touches | Main risk |
 |---|---|---|---|
-| M0 | n/a | Emulator tracing, one detour | No clean note hook. Fallback: publish the live NOTE value |
+| M0 ✅ | n/a | Emulator tracing, one detour | Done: hook at `0x4009fb2e` proven on a patched image |
 | M1 | S0 | New module folder, one DRAM unit, one detour, SEQUENCER rows, one gate | Note-off pairing |
 | M2 | S0 | Docs, media, perf record, native comparison, hardware report | Menu-space refusal beside the crowded set |
 | M3 | S1 → S2 | Turing unit, then a ROM stub + `defsyms` fallback, possibly `build_bus.py` and `src/engine/` | Shared-build change; pinned-address contract |
@@ -518,7 +510,7 @@ Integration with quantizer is the target, reached incrementally: each milestone 
 
 ## 6. Conclusion
 
-A Turing machine for Octatrack MIDI tracks is **feasible** as a ColdFire-only `midi-usb` module, with low hardware and project risk, but **unproven at its central hook**: no module here yet generates MIDI notes. M0 is therefore a research spike and must come first.
+A Turing machine for Octatrack MIDI tracks is **feasible** as a ColdFire-only `midi-usb` module, with low hardware and project risk. Its central hook is now **found and proven in the emulator** (§7): the stock note-on loop at `0x4009fb2e`, where a replaced note is also the one the stock note-off releases.
 
 Quantizer integration is not only possible but has an existing contract (`SCALE_AT`, already used by FM Synth). Staging it S0 → S1 → S2 → S3 keeps every release independent of quantizer until the optional link is proven. No quantizer conflict should be declared at any stage.
 
@@ -526,14 +518,63 @@ Quantizer integration is not only possible but has an existing contract (`SCALE_
 
 **Next steps:**
 1. Owner review of this study and the questions in §2.5.
-2. M0 on a machine with the native toolchain and a 1.40C update file.
-3. If M0 succeeds, M1 on a branch, with a draft PR for early feedback.
+2. M1 on a branch: the same detour through the real octabam build, the shift register, and an emulator gate built on MIDI OUT capture.
+3. A draft PR for early feedback once M1's gate is green.
+
+
+## 7. M0 result: the hook, measured (8 October 2026)
+
+Everything below ran on this repository's vendored octabam emulator (`tools/emu/ot_emu`, built from `sdk/octabam` at this branch) with the stock 1.40C MAIN OS (SHA-256 `164f3122…0a84e`, matching `src/engine/assets/stock-dsp-metadata.json`). The firmware and every image derived from it stayed outside the repository. Nothing here ran on hardware.
+
+**Fixture, through the emulated panel.** No project template was needed. On an empty scratch card: dismiss the date prompt, MIDI → T1, FUNC+SRC, turn CHAN to 1 and confirm with YES, then REC, TRIG 1/5/9/13, REC and PLAY. The CHAN edit only takes effect after YES. Before that, the track sends nothing.
+
+**MIDI OUT capture.** The interactive emulator does not expose UART0's transmit bytes (`--midi-out` writes only in batch mode), so the scratch copy of `ot_emu` gained a one-command `uart0` query. That small change to the emulator is worth proposing upstream. Stock output for four trigs at 120 BPM over 4 s:
+
+```
+90 30 64 30 00 90 30 64 30 00 30 64 30 00 ...    note-on C3 vel 100, note-off as vel 0, running status
+```
+
+**Tracing.**
+1. The note bytes do not pass through the single-byte UART queues `0x4001084c`/`0x400108b0`. A PC watch on every routine of the UART driver (`0x400106ec..0x40011040`) showed the 3-byte queue `0x40010bc8(len, buf)` called once per note from two sites in the sequencer: `0x4009fbac` (note-on) and `0x4009f8bc` (note-off).
+2. Reading back from `0x4009fbac` gives the chord loop described in §2.2, with its head at `0x4009fb2e`.
+3. A PC watch on `0x4009fb2e`, with trigs on T1 (4 steps) and T2 (2 steps), recorded `d7=0` 9 passes and `d7=1` 4 passes for each `d4` = 0..3, matching the 13 note-ons sent. One pass per slot per firing trig per track. (T2's channel edit did not take in that run, so both tracks transmitted on channel 1; the pass counts are unaffected.)
+
+**Proof by patching (scratch image, never committed).** The six bytes at `0x4009fb2e` were replaced by `jmp 0x400d2800`, a 60-byte stub in the free zero run `0x400d24d0..0x400d2ce0` (`OVERFLOW_RUN` in `build_bus.py`). On T1, at `d4 == 0`, the stub adds 12 to all four chord slots (keeping `-1` and dropping notes above 127), then runs the displaced instructions and jumps to `0x4009fb34`.
+
+| Image | MIDI OUT (first notes) | Verdict |
+|---|---|---|
+| stock | `90 30 64 30 00 90 30 64 30 00 30 64 30 00 …` | baseline |
+| +12 on NOTE only | `90 3c 64 30 64 3c 00 30 00 …` | the old note sounds too: NOT2–4 were precomputed from the original NOTE (§3.2) |
+| +12 on all four slots | `90 3c 64 3c 00 90 3c 64 3c 00 3c 64 3c 00 …` | identical to stock with 0x30 → 0x3c, note-offs matched |
+
+```asm
+| the stub (GNU as, -mcpu=5475), linked at 0x400d2800
+stub:   tst.l %d4 ; bne.s 9f            | chord slot 0 only
+        tst.l %d7 ; bne.s 9f            | track 1 only (the spike)
+        move.l %d1,-(%sp) ; move.l %a0,-(%sp)
+        move.l %a2,%a0 ; moveq #3,%d1
+1:      mvs.b (%a0),%d0 ; bmi.s 2f      | -1: no note in this slot
+        addi.l #12,%d0 ; cmpi.l #127,%d0 ; ble.s 3f
+        moveq #-1,%d0                   | out of range: drop it
+3:      move.b %d0,(%a0)
+2:      addq.l #1,%a0 ; subq.l #1,%d1 ; bpl.s 1b
+        move.l (%sp)+,%a0 ; move.l (%sp)+,%d1
+9:      move.b (%a2),%d1 ; mvs.b %d1,%d0 ; moveq #-1,%d3   | displaced
+        jmp 0x4009fb34
+```
+
+**What M0 did not cover:**
+- The detour has not yet been built through octabam's composition (`build_bus.py`, `Detour` + `stock_guard`) or the browser builder. That is the first M1 step and needs the Docker toolchain image or the native setup used here.
+- No NOTE parameter lock, trig condition, ARP, live recording, MIDI-IN-played notes, Part/pattern change or stop-mid-note case has been run. Whether ARP notes pass through this loop is unknown.
+- The pitch-class remap after the hook (`0x400d80a0`) is only read, not identified. If it is a stock key/scale setting it matters for scale stages S1–S2, which would then compose with or replace it.
+- No timing or cycle measurement. The stub's cost is a few dozen instructions per trig, but that is an estimate, not a `cfmeter.py` result.
+- No hardware.
 
 ---
 
 ## Appendix A: Hook search, concretely
 
-The emulator options below exist in `sdk/octabam/tools/emu/ot_emu/main.cpp`. How they combine for this search is a plan, not a run.
+Written before M0 as a plan. §7 records what was actually run: the panel-driven fixture and an interactive `uart0` query replaced the batch `--midi-out` path, and the UART driver's routine entries replaced `--watch-mem`.
 
 1. Fixture: `ot_spec.py apply` a scratch project with MIDI track 1 on channel 1, trigs on steps 1/5/9/13, NOTE lock on step 9. Write it into every Part of every bank (the AGENTS.md "the part the emulated load applies is not the part that plays" trap).
 2. Baseline: `ot_emu --card <img> --project <name> --sequencer --frames 400 --midi-out base.bin`. Parse `base.bin` for `9n kk vv` / `8n kk vv` (or `9n kk 00`). Expect four note-on/off pairs, the third at the locked note.
