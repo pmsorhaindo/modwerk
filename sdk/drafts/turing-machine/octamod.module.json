@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 2,
+  "id": "turing-machine",
+  "key": "TURING MACHINE",
+  "name": "Turing Machine",
+  "version": "0.1.0-experimental",
+  "category": "midi-usb",
+  "author": {
+    "github": "pmsorhaindo",
+    "credits": [
+      "pmsorhaindo",
+      "octabam: Sam Banks; additional source attribution in SDK THIRD_PARTY.md"
+    ]
+  },
+  "nativeManifest": "manifest.py",
+  "presentation": {
+    "label": "MIDI GENERATOR",
+    "family": "Sequencing",
+    "summary": "A looping shift register writes the notes of one MIDI track.",
+    "overview": "In the style of the Music Thing Modular Turing Machine: a 16-step loop of bits advances once per trig of the selected MIDI track and lifts each trig 0 to 24 semitones above its own NOTE. TURING LOCK decides how often a bit flips as it comes round: 127 repeats the phrase, 64 is random.",
+    "highlights": [
+      "One MIDI track, chosen in PROJECT > CONTROL > MIDI SEQUENCER",
+      "LOCK 127 freezes the current 16-note phrase; 64 lets it wander",
+      "Follows the track's own trigs, NOTE, chord notes, TRAN and note lengths"
+    ],
+    "usage": [
+      "Set TURING TRACK to a MIDI track with trigs, then play.",
+      "Turn TURING LOCK towards 127 to keep a phrase you like, towards 64 to let it change."
+    ]
+  },
+  "controls": [
+    {
+      "name": "TURING TRACK",
+      "default": 0,
+      "count": 9,
+      "doc": "MIDI track whose notes the register writes; OFF leaves every track stock",
+      "labels": [
+        "OFF",
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5",
+        "T6",
+        "T7",
+        "T8"
+      ]
+    },
+    {
+      "name": "TURING LOCK",
+      "default": 64,
+      "count": 128,
+      "doc": "Chance that a bit keeps its value as it loops: 127 never flips (the phrase repeats), 64 flips about half the time, 0 always flips (a 32-step phrase)",
+      "labels": null
+    }
+  ],
+  "compatibility": {
+    "firmware": "1.40C",
+    "location": "MIDI tracks",
+    "conflicts": [],
+    "limitations": [
+      "M1 prototype: one track at a time, a fixed 16-step loop, chromatic notes 0..24 semitones above each trig's NOTE.",
+      "Settings are battery-RAM bytes like CC DIRECT CONNECT: global, not saved with a project or Part. The register itself is runtime state.",
+      "The register starts from the same seed after every boot.",
+      "Not tested: arpeggiator, NOTE parameter locks, incoming MIDI notes, Part or pattern changes while playing, timing, hardware."
+    ],
+    "effectId": null
+  },
+  "resources": {
+    "recorded": "Not measured",
+    "storage": {
+      "label": "Storage",
+      "display": "Not measured",
+      "value": null,
+      "unit": "unknown",
+      "method": "unmeasured",
+      "conditions": "No measurements exist yet. Add exact conditions and source evidence when available.",
+      "source": "TESTING.md"
+    },
+    "processing": {
+      "label": "CPU / DSP load",
+      "display": "Not measured",
+      "value": null,
+      "unit": "unknown",
+      "method": "unmeasured",
+      "conditions": "No measurements exist yet. Add exact conditions and source evidence when available.",
+      "source": "TESTING.md"
+    }
+  },
+  "tests": {
+    "report": "TESTING.md",
+    "summary": "Emulator only: modules/turing-machine/verify.py drives the panel under the ColdFire port and reads MIDI OUT (15 checks). With TURING TRACK OFF, MIDI OUT matched stock byte for byte. Cycles, memory totals and hardware are not measured.",
+    "hardwareStatus": "untested",
+    "evidenceRevision": "b8deefc88b2c3e5f3c6158e364eb741df1924e1d",
+    "gates": [
+      "modules/turing-machine/verify.py"
+    ]
+  },
+  "license": {
+    "spdx": "MIT",
+    "file": "LICENSE",
+    "declaration": "Original module source by pmsorhaindo under the MIT licence in LICENSE, built with octabam by Sam Banks. No Elektron firmware, extracted routines or tables are included; stock bytes are referenced by address, length and SHA-256. Original OT LCD captures are declared in media/LICENSE.md as LicenseRef-OT-UI-Documentation; underlying Elektron rights remain reserved. Reviewer verification is required before publication and is not automatic legal clearance."
+  },
+  "media": [
+    {
+      "path": "media/ot-location.png",
+      "captureType": "emulator",
+      "caption": "Press PROJ, select CONTROL and press RIGHT, then select MIDI SEQUENCER and press YES.",
+      "alt": "PROJECT menu with CONTROL selected and MIDI SEQUENCER highlighted in its list.",
+      "credit": "Modwerk contributors (headless capture)",
+      "license": "LicenseRef-OT-UI-Documentation",
+      "source": "original",
+      "otUi": {
+        "page": "PROJECT > CONTROL",
+        "shows": "location",
+        "firmware": "1.40C",
+        "moduleVersion": "0.1.0-experimental",
+        "imageSha256": "3ef31261ded02280b85498049cfdc0dabb39b55f49cb079df4f37d03cc4fb6eb",
+        "setup": "Headless ot_emu built from this repository's tools/emu/ot_emu (emulator SHA-256 2360ffb24483...); MKII panel; native octabam image of TURING MACHINE alone; empty scratch card; transport stopped; actual 128x64 LCD at integer scale 6 in monochrome. Panel plan in media/capture.json."
+      }
+    },
+    {
+      "path": "media/ot-rows-default.png",
+      "captureType": "emulator",
+      "caption": "TURING TRACK and TURING LOCK sit under CC DIRECT CONNECT. TURING TRACK starts OFF, so every MIDI track plays as stock.",
+      "alt": "MIDI SEQUENCER page: CC DIRECT CONNECT checked, TURING TRACK OFF, TURING LOCK 64.",
+      "credit": "Modwerk contributors (headless capture)",
+      "license": "LicenseRef-OT-UI-Documentation",
+      "source": "original",
+      "otUi": {
+        "page": "CONTROL > MIDI SEQUENCER",
+        "shows": "controls",
+        "firmware": "1.40C",
+        "moduleVersion": "0.1.0-experimental",
+        "imageSha256": "3ef31261ded02280b85498049cfdc0dabb39b55f49cb079df4f37d03cc4fb6eb",
+        "setup": "Headless ot_emu built from this repository's tools/emu/ot_emu (emulator SHA-256 2360ffb24483...); MKII panel; native octabam image of TURING MACHINE alone; empty scratch card; transport stopped; actual 128x64 LCD at integer scale 6 in monochrome. Panel plan in media/capture.json."
+      }
+    },
+    {
+      "path": "media/ot-rows-locked.png",
+      "captureType": "emulator",
+      "caption": "DOWN and RIGHT set TURING TRACK to T1; on TURING LOCK, LEVEL turned up to 127 makes the current 16-note phrase repeat. Turn it back to 64, or set TURING TRACK to OFF, to stop.",
+      "alt": "MIDI SEQUENCER page: TURING TRACK T1, TURING LOCK 127 selected.",
+      "credit": "Modwerk contributors (headless capture)",
+      "license": "LicenseRef-OT-UI-Documentation",
+      "source": "original",
+      "otUi": {
+        "page": "CONTROL > MIDI SEQUENCER",
+        "shows": "controls",
+        "firmware": "1.40C",
+        "moduleVersion": "0.1.0-experimental",
+        "imageSha256": "3ef31261ded02280b85498049cfdc0dabb39b55f49cb079df4f37d03cc4fb6eb",
+        "setup": "Headless ot_emu built from this repository's tools/emu/ot_emu (emulator SHA-256 2360ffb24483...); MKII panel; native octabam image of TURING MACHINE alone; empty scratch card; transport stopped; actual 128x64 LCD at integer scale 6 in monochrome. Panel plan in media/capture.json."
+      }
+    }
+  ],
+  "access": {
+    "location": "PROJECT > CONTROL > MIDI SEQUENCER: TURING TRACK and TURING LOCK, under CC DIRECT CONNECT.",
+    "steps": [
+      "Press PROJ. Select CONTROL with UP/DOWN and press RIGHT.",
+      "Select MIDI SEQUENCER and press YES.",
+      "Select TURING TRACK with DOWN and press RIGHT, or turn LEVEL, to choose a MIDI track.",
+      "Select TURING LOCK and turn LEVEL: 127 repeats the phrase, 64 is random."
+    ],
+    "screenshots": [
+      "media/ot-location.png",
+      "media/ot-rows-default.png",
+      "media/ot-rows-locked.png"
+    ]
+  }
+}
