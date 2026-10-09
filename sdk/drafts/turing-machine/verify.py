@@ -4,20 +4,22 @@
     modules/turing-machine/verify.py [IMAGE]    from an octabam tree; default out/mainos_bus.bin
                                                 (make bus REMIX=<a remix with TURING MACHINE>)
 
-The fixture is made through the emulated panel on an empty scratch card, so
-no project file is needed: MIDI track 1 on channel 1 with a trig on every
-step and NOT2 set, MIDI track 2 on channel 2 with trigs on steps 1 and 9.
-MIDI OUT is read as the bytes the firmware queues for UART0: a write watch
-on the transmit ring that 0x40010bc8 fills (its pointer at 0x400b966c), in
-order, parsed with running status.
+Four boots under the ColdFire port, each making its fixture through the
+emulated panel on an empty scratch card. MIDI OUT is read as the bytes the
+firmware queues for UART0: a write watch on the transmit ring that
+0x40010bc8 fills (its pointer at 0x400b966c), parsed with running status.
 
-Checks, all on one boot:
-  1. TURING TRACK OFF: every note is the trig's NOTE (C3 = 48) on both tracks.
-  2. T1, LOCK 127: track 1 repeats one 16-note phrase, inside NOTE..NOTE+24;
-     track 2 still plays 48.
-  3. LOCK 64, set from the menu while playing: the phrase changes.
-  4. Throughout: NOT2 keeps the stock interval to NOTE; every note-on is
-     released and nothing sounds after STOP.
+  1. Fixed test seed. MIDI track 1 on channel 1 with a trig on every step
+     and NOT2 set, track 2 on channel 2 with a trig on every step. Every MODE
+     OFF plays NOTE; then every Turing note is compared with a model of the
+     engine (Model below): LOCK 127 at LENGTH 16 and 5, LOCK 64 and LOCK 0
+     after a STOP and PLAY. A LOCK change while playing freezes the phrase,
+     NOT2 keeps its interval and every note-on is released.
+  2-3. No test seed, PLAY 500 ms and 2,700 ms after the fixture: the two
+     first phrases differ, and neither is the fixed seed's.
+  4. A writable card: a new project starts every track OFF; SAVE writes
+     "#TURING_T1=1,127,8" after PATTERN_CHANGE_AUTO_SILENCE_TRACKS; RELOAD
+     brings it back after the track was set OFF.
 Not hardware. The image must carry the module (the detour at 0x4009fb2e).
 """
 import functools
@@ -55,15 +57,15 @@ def check(name, ok, detail=""):
 class Port:
     """ot_emu --interactive on a scratch card (tools/emu/ot_emu/main.cpp)."""
 
-    def __init__(self, image, work):
+    def __init__(self, image, work, writable=False):
         sys.path.insert(0, str(ROOT / "tools/emu"))
         import emu_card
         work.mkdir()
-        card = work / "card.img"
+        card = self.card = work / "card.img"
         (work / "tree").mkdir()
         card.write_bytes(emu_card.build_image(str(work / "tree"), 32))
         cmd = [str(EMU), "--image", str(image), "--card", str(card), "--dsp", "--frame", "--ms", "3000",
-               "--interactive", "--main-level", "off", "--rtc", "off", "--mkii"]
+               "--interactive", "--main-level", "off", "--rtc", "off", "--mkii"] + (["--card-rw"] if writable else [])
         self.p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                   stderr=subprocess.DEVNULL, cwd=work)
         self.sel = selectors.DefaultSelector()
@@ -121,6 +123,10 @@ class Port:
     def writes(self):
         recs = self.cmd("writes", b"writes").split()[2:]
         return bytes(int(r.split(":")[3], 16) & 0xff for r in recs)
+
+    def card_files(self):
+        import emu_card
+        return emu_card.extract_image(self.card.read_bytes())
 
     def quit(self):
         try:
@@ -377,6 +383,71 @@ def timer_seed_run(image, work, wait_ms):
         port.quit()
 
 
+def project_menu(port, downs):
+    """PROJ > PROJECT list item `downs` rows below CHANGE (SAVE 1, RELOAD 2, the set's CHANGE 6)."""
+    port.press("MENU")
+    port.run(400)
+    port.press("LEFT")
+    for _ in range(3):
+        port.press("UP")
+    port.press("RIGHT")
+    for key, times in (("UP", 16), ("DOWN", downs)):
+        for _ in range(times):
+            port.press(key)
+    port.press("YES")
+    port.run(1500)
+
+
+def project_run(image, work):
+    """One boot on a writable scratch card: new project, SAVE, RELOAD, the file."""
+    port = Port(image, work, writable=True)
+    try:
+        port.run(1000)
+        port.press("NO")
+        open_page(port)
+        set_track(port, 1, True, 127, 8)
+        close_page(port)
+        project_menu(port, 6)               # the set's CHANGE: "not within a project", YES
+        port.press("YES")
+        port.run(1000)
+        for _ in range(5):                  # <CREATE NEW SET>, its name, the set, <CREATE EMPTY PROJECT>, its name
+            port.press("YES")
+            port.run(2500)
+        port.run(25000)
+        s = settings(port)
+        check("new project: every track starts OFF", s["valid"] and s["enabled"] == 0
+              and s["lock"] == [64] * 8 and s["length"] == [16] * 8, f"{s}")
+        open_page(port)
+        set_track(port, 1, True, 127, 8)
+        close_page(port)
+        project_menu(port, 1)               # SAVE
+        port.press("YES")
+        port.run(20000)
+        open_page(port)
+        set_track(port, 1, False, 64, 16)
+        close_page(port)
+        s = settings(port)
+        check("after SAVE, T1 set back to OFF", s["valid"] and s["enabled"] == 0, f"{s}")
+        project_menu(port, 2)               # RELOAD
+        port.press("YES")
+        port.run(25000)
+        s = settings(port)
+        check("RELOAD restores the saved T1 ON 127/8", s["valid"] and s["enabled"] == 1
+              and s["lock"][0] == 127 and s["length"][0] == 8, f"{s}")
+    finally:
+        port.quit()
+    files = port.card_files()
+    work_files = {path: data.decode("latin1").splitlines() for path, data in files.items()
+                  if path.lower().endswith("project.work")}
+    lines = next(iter(work_files.values()), [])
+    turing = [line for line in lines if line.startswith("#TURING")]
+    check("project.work holds exactly #TURING_T1=1,127,8", turing == ["#TURING_T1=1,127,8"], f"{turing}")
+    if turing:
+        at = lines.index(turing[0])
+        check("written after PATTERN_CHANGE_AUTO_SILENCE_TRACKS", lines[at - 1].startswith("PATTERN_CHANGE_AUTO_SILENCE_TRACKS="),
+              f"{lines[at - 1]!r}")
+
+
 def settings_record(tracks):
     raw = bytearray(32)
     raw[:3] = b"TM\x01"
@@ -402,6 +473,7 @@ def main():
         fixed = fixed_seed_run(image, pathlib.Path(td) / "fixed")
         for i, wait in enumerate((500, 2700)):
             phrases.append(timer_seed_run(image, pathlib.Path(td) / f"timer{i}", wait))
+        project_run(image, pathlib.Path(td) / "project")
     check("timer seed: two boots, PLAY at different moments, different first phrases",
           phrases[0] != phrases[1], f"{phrases}")
     check("timer seed: neither boot plays the test seed's phrase", fixed not in phrases, f"{fixed} in {phrases}")

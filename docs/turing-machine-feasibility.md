@@ -486,8 +486,12 @@ Results and limits are in the draft's TESTING.md. Not yet done: project or Part 
   - the boot seed, taken from DMA timer 3's free-running count at the first Turing trig after PLAY, with a fixed test seed the emulator can write;
   - a gate that checks every note against a model of the engine;
   - new screenshots and a thumbnail.
+- Done since (9 October 2026): **per-project settings** at Turing's own sites, chosen over a shared bridge with Scale Quantizer. Each sits beside one of quantizer's: the loader entry `0x400866ee`, the loader's next-line point `0x40088224`, the serializer block `0x400888d2` and the project defaults `0x40025ad4`. A track not at the defaults is saved as `#TURING_T<n>=<mode>,<lock>,<length>`.
+- **Integration with other modules, later:**
+  - `0x40088224` is the obvious site for any module that reads its own `#` lines. A second module choosing it would be refused by the ledger, and that is the moment to replace both, and quantizer's, with one shared project-lines bridge.
+  - The same applies at scale stage S3, when Turing and quantizer start sharing settings.
+  - Per-Part storage is a separate question: the only known free run in the Part window is MIDI Scenes'.
 - Still open:
-  - per-project or per-Part persistence: the loader and writer sites are quantizer's, so this needs a shared bridge or other sites;
   - `evidence/performance.json` (`cfmeter.py` under a MIDI flood);
   - `module:verify`, which needs the Docker toolchain image;
   - the catalog entry and release notes;

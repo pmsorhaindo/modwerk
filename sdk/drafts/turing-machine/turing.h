@@ -57,6 +57,12 @@ typedef struct {
     uint16_t reserved;
 } TmGlobals;
 
+/* The project file's stock text writer, as the serializer 0x40088288 holds it
+ * in a4, a3 and a2: format into a buffer, measure it, write it to the file. */
+typedef int (*TmFormat)(char *buffer, const char *format, ...);
+typedef int (*TmLength)(const char *text);
+typedef int (*TmWrite)(int file, const char *buffer, int length);
+
 extern TmState tm_states[TM_TRACKS];
 extern TmGlobals tm_globals;
 
@@ -72,4 +78,7 @@ void tm_set_edit(int32_t delta, int32_t toggle);
 void tm_set_mode(int32_t delta, int32_t toggle);
 void tm_set_lock(int32_t delta, int32_t toggle);
 void tm_set_length(int32_t delta, int32_t toggle);
+void tm_project_defaults(void);
+void tm_project_line(const char *line, int32_t parse_only);
+void tm_project_write(TmFormat format, TmLength length, TmWrite write, char *buffer, int file);
 #endif

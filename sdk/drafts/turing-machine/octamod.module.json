@@ -21,6 +21,7 @@
     "highlights": [
       "A register per MIDI track, each with its own LOCK and LENGTH",
       "LOCK 127 freezes the current phrase; 64 lets it wander",
+      "Settings saved with the project; a new project starts with every track OFF",
       "A new first phrase each boot, seeded from when PLAY is pressed",
       "Follows the track's own trigs, NOTE, chord notes, TRAN and note lengths"
     ],
@@ -93,7 +94,7 @@
     "conflicts": [],
     "limitations": [
       "Chromatic notes 0..24 semitones above each trig's NOTE; scale stages come later.",
-      "Settings are a battery-RAM record: global, not saved with a project or Part. The registers are runtime state; a STOP and PLAY keeps them.",
+      "Settings are saved per project as #TURING_T<n> lines that stock loaders skip, not per Part. The registers are runtime state; a STOP and PLAY or a reload keeps them.",
       "The boot seed is read from DMA timer 3 at the first Turing trig; the timer's behaviour on hardware is inferred from stock's own programming of it, not measured.",
       "Not tested: arpeggiator, NOTE parameter locks, incoming MIDI notes, Part or pattern changes while playing, timing under load, hardware."
     ],
@@ -148,7 +149,7 @@
         "shows": "location",
         "firmware": "1.40C",
         "moduleVersion": "0.1.0-experimental",
-        "imageSha256": "f4d565ba0c29e5643b25faa3c59216803267dbaa51f2f23b557ff6417bc41527",
+        "imageSha256": "47b44879f5c4ffe414e4d97b5a197342352dde6c5367206525725070c4f638a4",
         "setup": "Headless ot_emu built from this repository's tools/emu/ot_emu (emulator SHA-256 2360ffb24483...); MKII panel; native octabam image of TURING MACHINE alone; empty scratch card; transport stopped; actual 128x64 LCD at integer scale 6 in monochrome. Panel plan in media/capture.json."
       }
     },
@@ -165,7 +166,7 @@
         "shows": "controls",
         "firmware": "1.40C",
         "moduleVersion": "0.1.0-experimental",
-        "imageSha256": "f4d565ba0c29e5643b25faa3c59216803267dbaa51f2f23b557ff6417bc41527",
+        "imageSha256": "47b44879f5c4ffe414e4d97b5a197342352dde6c5367206525725070c4f638a4",
         "setup": "Headless ot_emu built from this repository's tools/emu/ot_emu (emulator SHA-256 2360ffb24483...); MKII panel; native octabam image of TURING MACHINE alone; empty scratch card; transport stopped; actual 128x64 LCD at integer scale 6 in monochrome. Panel plan in media/capture.json."
       }
     },
@@ -182,7 +183,7 @@
         "shows": "controls",
         "firmware": "1.40C",
         "moduleVersion": "0.1.0-experimental",
-        "imageSha256": "f4d565ba0c29e5643b25faa3c59216803267dbaa51f2f23b557ff6417bc41527",
+        "imageSha256": "47b44879f5c4ffe414e4d97b5a197342352dde6c5367206525725070c4f638a4",
         "setup": "Headless ot_emu built from this repository's tools/emu/ot_emu (emulator SHA-256 2360ffb24483...); MKII panel; native octabam image of TURING MACHINE alone; empty scratch card; transport stopped; actual 128x64 LCD at integer scale 6 in monochrome. Panel plan in media/capture.json."
       }
     }

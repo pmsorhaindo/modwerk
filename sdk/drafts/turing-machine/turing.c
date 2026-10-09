@@ -39,13 +39,7 @@ static unsigned tm_valid(void) {
     return 1;
 }
 
-static void tm_read(TmSettings *out) {
-    if (tm_valid()) {
-        const volatile uint8_t *src = (const volatile uint8_t *)SETTINGS;
-        uint8_t *dst = (uint8_t *)out;
-        for (unsigned i = 0; i < sizeof(TmSettings); ++i) dst[i] = src[i];
-        return;
-    }
+static void tm_defaults(TmSettings *out) {
     uint8_t *dst = (uint8_t *)out;
     for (unsigned i = 0; i < sizeof(TmSettings); ++i) dst[i] = 0;
     out->magic = TM_NV_MAGIC;
@@ -54,6 +48,16 @@ static void tm_read(TmSettings *out) {
         out->lock[t] = TM_LOCK_DEFAULT;
         out->length[t] = TM_LENGTH_DEFAULT;
     }
+}
+
+static void tm_read(TmSettings *out) {
+    if (!tm_valid()) {
+        tm_defaults(out);
+        return;
+    }
+    const volatile uint8_t *src = (const volatile uint8_t *)SETTINGS;
+    uint8_t *dst = (uint8_t *)out;
+    for (unsigned i = 0; i < sizeof(TmSettings); ++i) dst[i] = src[i];
 }
 
 static void tm_write(TmSettings *in) {
@@ -203,4 +207,61 @@ void tm_set_length(int32_t delta, int32_t toggle) {
     tm_read(&s);
     s.length[t] = (uint8_t)tm_clamp((int32_t)s.length[t] + delta, TM_LENGTH_MIN, TM_LENGTH_MAX);
     tm_write(&s);
+}
+
+/* ---- the project file ---------------------------------------------------
+ * project.work is KEY=value text, and stock loaders skip a line starting with
+ * '#'. A track that is not at the defaults is saved as one line,
+ * "#TURING_T<n>=<mode>,<lock>,<length>". A storing load starts from the
+ * defaults, so a project without these lines plays every track stock. The
+ * battery-RAM record stays the live copy: a power cycle reads no project. */
+
+static const char tm_line_key[] = "#TURING_T";
+static const char tm_line_format[] = "#TURING_T%d=%d,%d,%d\r\n";
+
+void tm_project_defaults(void) {
+    TmSettings s;
+    tm_defaults(&s);
+    tm_write(&s);
+}
+
+/* The decimal at *p, advancing past it; -1 when there is none or it is too long. */
+static int32_t tm_decimal(const char **p) {
+    const char *s = *p;
+    int32_t value = 0;
+    unsigned digits = 0;
+    while (*s >= '0' && *s <= '9' && digits < 4u) value = value * 10 + (*s++ - '0'), ++digits;
+    if (!digits || (*s >= '0' && *s <= '9')) return -1;
+    *p = s;
+    return value;
+}
+
+void tm_project_line(const char *line, int32_t parse_only) {
+    for (unsigned i = 0; tm_line_key[i]; ++i)
+        if (line[i] != tm_line_key[i]) return;
+    const char *p = line + sizeof(tm_line_key) - 1u;
+    int32_t track = tm_decimal(&p), mode, lock, length;
+    if (track < 1 || track > (int32_t)TM_TRACKS || *p++ != '=') return;
+    if ((mode = tm_decimal(&p)) < 0 || *p++ != ',' || (lock = tm_decimal(&p)) < 0 || *p++ != ','
+        || (length = tm_decimal(&p)) < 0) return;
+    if (*p && *p != '\r' && *p != '\n') return;
+    if (mode > 1 || lock > 127 || length < (int32_t)TM_LENGTH_MIN || length > (int32_t)TM_LENGTH_MAX || parse_only) return;
+    TmSettings s;
+    unsigned t = (unsigned)track - 1u;
+    tm_read(&s);
+    s.enabled = (uint8_t)((s.enabled & ~(1u << t)) | ((unsigned)mode << t));
+    s.lock[t] = (uint8_t)lock;
+    s.length[t] = (uint8_t)length;
+    tm_write(&s);
+}
+
+void tm_project_write(TmFormat format, TmLength length, TmWrite write, char *buffer, int file) {
+    TmSettings s;
+    tm_read(&s);
+    for (unsigned t = 0; t < TM_TRACKS; ++t) {
+        unsigned on = (s.enabled >> t) & 1u;
+        if (!on && s.lock[t] == TM_LOCK_DEFAULT && s.length[t] == TM_LENGTH_DEFAULT) continue;
+        format(buffer, tm_line_format, (int)(t + 1u), (int)on, (int)s.lock[t], (int)s.length[t]);
+        write(file, buffer, length(buffer));
+    }
 }

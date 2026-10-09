@@ -8,7 +8,7 @@ tm_read:
 	mvz.w 269483520,%d0
 	move.l %a2,-(%sp)
 	move.l %d2,-(%sp)
-	move.l 12(%sp),%a2
+	move.l 12(%sp),%a1
 	cmp.l #21581,%d0
 	jne .L2
 	mvz.b 269483522,%d0
@@ -16,27 +16,27 @@ tm_read:
 	tst.l %d0
 	jeq .L19
 .L2:
-	move.l %a2,%d0
-	move.l %a2,%a0
+	move.l %a1,%d0
+	move.l %a1,%a0
 	add.l #32,%d0
-.L8:
+.L6:
 	clr.b (%a0)
 	addq.l #1,%a0
 	cmp.l %a0,%d0
-	jne .L8
+	jne .L6
 	moveq #1,%d2
-	move.w #21581,(%a2)
-	move.l %a2,%d0
+	move.w #21581,(%a1)
+	move.l %a1,%d0
 	add.l #12,%d0
-	lea (4,%a2),%a0
-	move.b %d2,2(%a2)
-.L9:
+	lea (4,%a1),%a0
+	move.b %d2,2(%a1)
+.L7:
 	moveq #16,%d1
 	move.b #64,(%a0)
 	addq.l #1,%a0
 	move.b %d1,7(%a0)
 	cmp.l %a0,%d0
-	jne .L9
+	jne .L7
 .L1:
 	move.l (%sp)+,%d2
 	move.l (%sp)+,%a2
@@ -45,7 +45,7 @@ tm_read:
 	move.b 269483551,%d2
 	moveq #90,%d1
 	move.l #269483520,%a0
-	move.w %d2,%a1
+	move.w %d2,%a2
 .L3:
 	move.b (%a0),%d0
 	addq.l #1,%a0
@@ -53,7 +53,7 @@ tm_read:
 	move.b %d0,%d1
 	cmp.l #269483551,%a0
 	jne .L3
-	move.w %a1,%d2
+	move.w %a2,%d2
 	mvz.b %d0,%d0
 	mvz.b %d2,%d1
 	cmp.l %d1,%d0
@@ -75,20 +75,20 @@ tm_read:
 	moveq #8,%d1
 	cmp.l %d0,%d1
 	jne .L4
-	move.l #269483520,%a1
-	move.l %a2,%d0
-	move.l %a2,%a0
-	sub.l %a2,%a1
+	move.l #269483520,%a2
+	move.l %a1,%d0
+	move.l %a1,%a0
+	sub.l %a1,%a2
 	add.l #32,%d0
-.L6:
-	move.b (%a1,%a0.l),(%a0)
+.L9:
+	move.b (%a2,%a0.l),(%a0)
 	addq.l #1,%a0
 	cmp.l %a0,%d0
 	jeq .L1
-	move.b (%a1,%a0.l),(%a0)
+	move.b (%a2,%a0.l),(%a0)
 	addq.l #1,%a0
 	cmp.l %a0,%d0
-	jne .L6
+	jne .L9
 	jra .L1
 	.size	tm_read, .-tm_read
 	.align	2
@@ -811,9 +811,396 @@ tm_set_length:
 	move.b %d0,35(%sp)
 	jra .L110
 	.size	tm_set_length, .-tm_set_length
+	.align	2
+	.globl	tm_project_defaults
+	.type	tm_project_defaults, @function
+tm_project_defaults:
+	lea (-32,%sp),%sp
+	move.l %a6,-(%sp)
+	lea (36,%sp),%a6
+	lea (4,%sp),%a0
+.L117:
+	clr.b (%a0)
+	addq.l #1,%a0
+	cmp.l %a0,%a6
+	jne .L117
+	moveq #1,%d1
+	move.w #21581,%d0
+	lea (8,%sp),%a0
+	move.b %d1,6(%sp)
+	move.w %d0,4(%sp)
+	moveq #16,%d0
+	add.l %sp,%d0
+.L118:
+	moveq #16,%d1
+	move.b #64,(%a0)
+	addq.l #1,%a0
+	move.b %d1,7(%a0)
+	cmp.l %a0,%d0
+	jne .L118
+	clr.b %d0
+	lea (4,%sp),%a0
+	moveq #35,%d1
+	move.l #269483520,%a6
+	add.l %sp,%d1
+	sub.l %a0,%a6
+	move.b %d0,35(%sp)
+.L119:
+	move.b (%a0),%d0
+	lea (%a6,%a0.l),%a1
+	addq.l #1,%a0
+	move.b %d0,(%a1)
+	cmp.l %a0,%d1
+	jne .L119
+	moveq #90,%d1
+	move.l #269483520,%a0
+.L120:
+	move.b (%a0),%d0
+	addq.l #1,%a0
+	eor.l %d1,%d0
+	move.b %d0,%d1
+	cmp.l #269483551,%a0
+	jne .L120
+	move.b %d0,(%a0)
+	move.l (%sp)+,%a6
+	lea (32,%sp),%sp
+	rts
+	.size	tm_project_defaults, .-tm_project_defaults
+	.align	2
+	.globl	tm_project_line
+	.type	tm_project_line, @function
+tm_project_line:
+	moveq #35,%d0
+	lea (-72,%sp),%sp
+	movem.l #17436,(%sp)
+	move.l 76(%sp),%a6
+	move.l %a6,%a0
+	lea tm_line_key+1,%a1
+.L129:
+	mvs.b (%a0),%d1
+	mvs.b %d0,%d0
+	addq.l #1,%a0
+	cmp.l %d1,%d0
+	jne .L127
+	move.b (%a1),%d0
+	addq.l #1,%a1
+	tst.b %d0
+	jne .L129
+	move.b 9(%a6),%d0
+	moveq #9,%d2
+	move.w %d0,%a1
+	move.l %a1,%d0
+	add.l #-48,%d0
+	mvz.b %d0,%d1
+	cmp.l %d1,%d2
+	jcs .L127
+	lea (9,%a6),%a0
+	clr.l %d1
+	lea (13,%a6),%a6
+.L131:
+	move.l %a0,28(%sp)
+	moveq #10,%d4
+	move.b 1(%a0),%d3
+	muls.l %d4,%d1
+	mvs.b %d0,%d0
+	addq.l #1,%a0
+	add.l %d0,%d1
+	move.w %d3,%a1
+	moveq #9,%d3
+	move.l %a1,%d0
+	add.l #-48,%d0
+	mvz.b %d0,%d2
+	cmp.l %d2,%d3
+	jcs .L130
+	cmp.l %a6,%a0
+	jne .L131
+.L127:
+	movem.l (%sp),#17436
+	lea (72,%sp),%sp
+	rts
+.L130:
+	subq.l #1,%d1
+	mov3q.l #7,%d4
+	cmp.l %d1,%d4
+	jcs .L127
+	mvs.b %a1,%d0
+	moveq #61,%d2
+	cmp.l %d0,%d2
+	jne .L127
+	move.b 1(%a0),%d3
+	moveq #9,%d4
+	move.w %d3,%a1
+	move.l %a1,%d2
+	add.l #-48,%d2
+	mvz.b %d2,%d0
+	cmp.l %d0,%d4
+	jcs .L127
+	move.l 28(%sp),%a0
+	sub.l %a6,%a6
+	move.l 28(%sp),%a2
+	addq.l #6,%a2
+	addq.l #2,%a0
+	move.l %a2,28(%sp)
+.L133:
+	move.l %a0,32(%sp)
+	moveq #10,%d4
+	move.b 1(%a0),%d0
+	move.l %a6,%d3
+	addq.l #1,%a0
+	muls.l %d4,%d3
+	mvs.b %d2,%d2
+	move.l %d3,%a6
+	add.l %d2,%a6
+	move.w %d0,%a1
+	moveq #9,%d3
+	move.l %a1,%d2
+	add.l #-48,%d2
+	mvz.b %d2,%d0
+	cmp.l %d0,%d3
+	jcs .L132
+	cmp.l 28(%sp),%a0
+	jne .L133
+	movem.l (%sp),#17436
+	lea (72,%sp),%sp
+	rts
+.L132:
+	tst.l %a6
+	jlt .L127
+	mvs.b %a1,%d0
+	moveq #44,%d4
+	cmp.l %d0,%d4
+	jne .L127
+	move.b 1(%a0),%d0
+	moveq #9,%d3
+	move.l %d0,%d2
+	add.l #-48,%d2
+	mvz.b %d2,%d0
+	cmp.l %d0,%d3
+	jcs .L127
+	move.l 32(%sp),%a0
+	sub.l %a1,%a1
+	move.l 32(%sp),%d4
+	addq.l #6,%d4
+	addq.l #2,%a0
+	move.l %d4,32(%sp)
+.L135:
+	move.l %a0,36(%sp)
+	moveq #10,%d4
+	move.b 1(%a0),%d0
+	move.l %a1,%d3
+	addq.l #1,%a0
+	muls.l %d4,%d3
+	mvs.b %d2,%d2
+	moveq #9,%d4
+	move.l %d3,%a1
+	add.l %d2,%a1
+	move.l %d0,%d2
+	add.l #-48,%d2
+	mvz.b %d2,%d3
+	cmp.l %d3,%d4
+	jcs .L134
+	cmp.l 32(%sp),%a0
+	jne .L135
+	movem.l (%sp),#17436
+	lea (72,%sp),%sp
+	rts
+.L134:
+	tst.l %a1
+	jlt .L127
+	mvs.b %d0,%d0
+	moveq #44,%d2
+	cmp.l %d0,%d2
+	jne .L127
+	move.b 1(%a0),%d0
+	moveq #9,%d4
+	move.l %d0,%a0
+	lea (-48,%a0),%a0
+	move.w %a0,%d3
+	mvz.b %d3,%d0
+	cmp.l %d0,%d4
+	jcs .L127
+	move.l 36(%sp),%a2
+	addq.l #2,%a2
+	move.l 36(%sp),%d0
+	addq.l #6,%d0
+	move.l %a2,28(%sp)
+	clr.l %d2
+	move.l %d0,36(%sp)
+.L137:
+	move.l 28(%sp),%a2
+	moveq #10,%d3
+	mvs.b %a0,%d4
+	muls.l %d3,%d2
+	addq.l #1,%a2
+	move.b (%a2),%d0
+	move.l %a2,28(%sp)
+	add.l %d4,%d2
+	moveq #9,%d4
+	move.l %d0,%a0
+	lea (-48,%a0),%a0
+	move.w %a0,%d3
+	mvz.b %d3,%d3
+	cmp.l %d3,%d4
+	jcs .L136
+	cmp.l 36(%sp),%a2
+	jne .L137
+	movem.l (%sp),#17436
+	lea (72,%sp),%sp
+	rts
+.L136:
+	tst.l %d2
+	jlt .L127
+	mvz.b %d0,%d0
+	moveq #13,%d3
+	cmp.l %d0,%d3
+	jcs .L127
+	mvs.w #-9218,%d4
+	btst %d0,%d4
+	jne .L127
+	mov3q.l #1,%d0
+	cmp.l %a6,%d0
+	jlt .L127
+	moveq #127,%d3
+	cmp.l %a1,%d3
+	jlt .L127
+	move.l %d2,%d0
+	moveq #14,%d4
+	subq.l #2,%d0
+	cmp.l %d0,%d4
+	jcs .L127
+	tst.l 80(%sp)
+	jne .L127
+	pea 40(%sp)
+	move.l %d1,28(%sp)
+	move.l %a1,24(%sp)
+	jsr tm_read
+	move.b 27(%sp),%d3
+	clr.b %d4
+	move.l 28(%sp),%d1
+	mov3q.l #1,%d0
+	move.b 47(%sp),35(%sp)
+	lea (44,%sp),%a1
+	lsl.l %d1,%d0
+	move.b %d2,56(%sp,%d1.l)
+	move.l #269483520,%d2
+	sub.l %a1,%d2
+	move.b %d3,48(%sp,%d1.l)
+	move.b %d4,75(%sp)
+	addq.l #4,%sp
+	move.l %d0,%a0
+	move.l %a6,%d0
+	lsl.l %d1,%d0
+	move.l %a0,%d1
+	not.l %d1
+	lea (71,%sp),%a6
+	move.b 31(%sp),%d3
+	and.l %d3,%d1
+	or.l %d1,%d0
+	move.b %d0,43(%sp)
+.L138:
+	move.b (%a1),%d0
+	lea (%a1,%d2.l),%a0
+	addq.l #1,%a1
+	move.b %d0,(%a0)
+	cmp.l %a6,%a1
+	jne .L138
+	moveq #90,%d1
+	move.l #269483520,%a0
+.L139:
+	move.b (%a0),%d0
+	addq.l #1,%a0
+	eor.l %d1,%d0
+	move.b %d0,%d1
+	cmp.l #269483551,%a0
+	jne .L139
+	move.b %d0,(%a0)
+	movem.l (%sp),#17436
+	lea (72,%sp),%sp
+	rts
+	.size	tm_project_line, .-tm_project_line
+	.align	2
+	.globl	tm_project_write
+	.type	tm_project_write, @function
+tm_project_write:
+	link.w %fp,#-68
+	movem.l #7420,(%sp)
+	pea -32(%fp)
+	clr.l %d2
+	move.l 8(%fp),%a4
+	move.l 12(%fp),%a3
+	move.l 16(%fp),%a2
+	move.l 24(%fp),%d5
+	jsr tm_read
+	mvz.b -29(%fp),%d4
+	addq.l #4,%sp
+.L152:
+	move.b -20(%fp,%d2.l),%d6
+	move.b -28(%fp,%d2.l),%d1
+	move.l %d4,%d0
+	asr.l %d2,%d0
+	mov3q.l #1,%d7
+	addq.l #1,%d2
+	and.l %d0,%d7
+	mvz.b %d6,%d3
+	mvz.b %d1,%d1
+	btst #0,%d0
+	jne .L150
+	moveq #64,%d0
+	cmp.l %d1,%d0
+	jeq .L163
+.L150:
+	move.l %d3,-(%sp)
+	move.l %d1,-(%sp)
+	move.l %d7,-(%sp)
+	move.l %d2,-(%sp)
+	pea tm_line_format
+	move.l 20(%fp),-(%sp)
+	jsr (%a4)
+	move.l 20(%fp),-(%sp)
+	jsr (%a3)
+	move.l %d0,-(%sp)
+	move.l 20(%fp),-(%sp)
+	move.l %d5,-(%sp)
+	jsr (%a2)
+	lea (40,%sp),%sp
+.L151:
+	moveq #8,%d0
+	cmp.l %d2,%d0
+	jne .L152
+	movem.l -68(%fp),#7420
+	unlk %fp
+	rts
+.L163:
+	moveq #16,%d0
+	cmp.l %d3,%d0
+	jeq .L151
+	move.l %d3,-(%sp)
+	move.l %d1,-(%sp)
+	move.l %d7,-(%sp)
+	move.l %d2,-(%sp)
+	pea tm_line_format
+	move.l 20(%fp),-(%sp)
+	jsr (%a4)
+	move.l 20(%fp),-(%sp)
+	jsr (%a3)
+	move.l %d0,-(%sp)
+	move.l 20(%fp),-(%sp)
+	move.l %d5,-(%sp)
+	jsr (%a2)
+	lea (40,%sp),%sp
+	jra .L151
+	.size	tm_project_write, .-tm_project_write
+	.section	.rodata
+	.type	tm_line_format, @object
+	.size	tm_line_format, 23
+tm_line_format:
+	.string	"#TURING_T%d=%d,%d,%d\r\n"
+	.type	tm_line_key, @object
+	.size	tm_line_key, 10
+tm_line_key:
+	.string	"#TURING_T"
 	.local	tm_number_text
 	.comm	tm_number_text,4,1
-	.section	.rodata
 	.type	tm_mode_names, @object
 	.size	tm_mode_names, 8
 tm_mode_names:
@@ -873,6 +1260,75 @@ tm_note_hook:
         mvs.b   %d1,%d0             | displaced
         moveq   #-1,%d3             | displaced
         jmp     0x4009fb34
+
+| The project file. The loader 0x400866c4 runs twice per load, a parse-only
+| pass then a storing pass; 58(%sp) in its frame is nonzero on the
+| parse-only pass. Scale Quantizer hooks the neighbouring instructions
+| (0x400866cc, 0x400867a2, 0x400888aa, 0x40025ac2); these sites are its
+| neighbours, so the two compose without sharing a site.
+
+| Loader entry, after the frame is set up (0x400866ee): a storing load
+| starts from the defaults.
+        .global tm_load_entry_hook
+tm_load_entry_hook:
+        tst.l   58(%sp)
+        bne.s   1f
+        lea     -16(%sp),%sp
+        movem.l %d0-%d1/%a0-%a1,(%sp)
+        jsr     tm_project_defaults
+        movem.l (%sp),%d0-%d1/%a0-%a1
+        lea     16(%sp),%sp
+1:      pea     0x400b44b5          | displaced
+        jmp     0x400866f4
+
+| The loader's next-line point (0x40088224), reached once per complete line
+| (comments, Scale Quantizer's lines and every stock key) with d3 -> the
+| line, before the buffer is cleared.
+        .global tm_load_line_hook
+tm_load_line_hook:
+        lea     -16(%sp),%sp
+        movem.l %d0-%d1/%a0-%a1,(%sp)
+        move.l  16+58(%sp),-(%sp)
+        move.l  %d3,-(%sp)
+        jsr     tm_project_line
+        addq.l  #8,%sp
+        movem.l (%sp),%d0-%d1/%a0-%a1
+        lea     16(%sp),%sp
+        pea     0x400b44b5          | displaced
+        jmp     0x4008822a
+
+| The serializer 0x40088288, one block after Scale Quantizer's: the Turing
+| lines go between PATTERN_CHANGE_AUTO_SILENCE_TRACKS and
+| PATTERN_CHANGE_AUTO_TRIG_LFOS (0x400888d2).
+| a4 = format, a3 = length, a2 = write, d2 = the line buffer, d3 = the file.
+        .global tm_write_hook
+tm_write_hook:
+        lea     -16(%sp),%sp
+        movem.l %d0-%d1/%a0-%a1,(%sp)
+        move.l  %d3,-(%sp)
+        move.l  %d2,-(%sp)
+        move.l  %a2,-(%sp)
+        move.l  %a3,-(%sp)
+        move.l  %a4,-(%sp)
+        jsr     tm_project_write
+        lea     20(%sp),%sp
+        movem.l (%sp),%d0-%d1/%a0-%a1
+        lea     16(%sp),%sp
+        mvs.b   0x80000050,%d0      | displaced
+        move.l  %d0,-(%sp)          | displaced
+        jmp     0x400888da
+
+| Project defaults (0x40025848: cold boot, a boot with no project, a new
+| project): every track OFF.
+        .global tm_defaults_hook
+tm_defaults_hook:
+        lea     -16(%sp),%sp
+        movem.l %d0-%d1/%a0-%a1,(%sp)
+        jsr     tm_project_defaults
+        movem.l (%sp),%d0-%d1/%a0-%a1
+        lea     16(%sp),%sp
+        clr.l   0x100b14de          | displaced, last: the caller sees its flags
+        rts
 
 | Explicitly initialized, loader-owned DRAM: a DRAM unit's .bss is never
 | cleared. The C's static assertions check the sizes.

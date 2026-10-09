@@ -34,8 +34,23 @@ PROJECT > CONTROL > MIDI SEQUENCER, under CC DIRECT CONNECT (the page shows four
 | TURING LOCK | 0..127 | 64 | 127: the phrase repeats. 64: random. 0: a phrase twice LENGTH, its second half inverted. |
 | TURING LENGTH | 2..16 | 16 | The loop length, in trigs. Changing it keeps the register, so a shorter loop can grow back. |
 
-RIGHT and LEFT step a row by one; LEVEL turns it faster. MODE, LOCK and LENGTH are kept per track in
-battery-backed RAM: they survive a power cycle and apply to every project.
+RIGHT and LEFT step a row by one; LEVEL turns it faster. MODE, LOCK and LENGTH are saved with the
+project (below) and kept in battery-backed RAM in between, so a power cycle keeps them.
+
+### Saved with the project
+
+SAVE and SYNC TO CARD write one line per track that is not at the defaults into `project.work`, after
+`PATTERN_CHANGE_AUTO_SILENCE_TRACKS`:
+
+```
+#TURING_T1=1,127,8
+```
+
+That is track, MODE (0/1), LOCK and LENGTH. Loading a project, RELOAD and CHANGE included, starts from
+every track OFF and then applies its lines, so a project without them plays stock. A new project starts
+OFF. The stock loader skips lines that start with `#`, so a project saved with the module loads on stock
+firmware or without the module, with its MIDI tracks playing their own notes. The registers themselves
+are not saved: a reload keeps the current phrases, and the next boot starts new ones.
 
 ## Usage
 
@@ -72,7 +87,7 @@ the note path runs its stock instructions; MIDI OUT matched stock byte for byte 
 Limitations:
 
 - Chromatic notes only. Scale stages are planned (study, section 2.3).
-- Settings are global, not saved with a project or Part; TURING TRACK resets to T1 at boot.
+- Settings are saved per project, not per Part; TURING TRACK resets to T1 at boot.
 - The boot seed relies on DMA timer 3 counting on the unit as stock programs it (mode `0x000b`, reference `0xffffffff`). That is inferred from stock's register setup and measured in the emulator, not on hardware.
 - MIDI Scenes builds only on its own, so the two cannot be combined.
 - Not tested: arpeggiator, NOTE parameter locks, incoming MIDI notes, live recording, Part or pattern changes while playing, a project reload, timing under load, hardware.
@@ -81,7 +96,8 @@ Limitations:
 
 `verify.py` (`modules/turing-machine/verify.py` once copied into octabam) runs under the ColdFire port and
 reads MIDI OUT. With the fixed test seed it checks every note against a model of the engine; without it,
-two boots with PLAY at different moments must start different phrases. See [TESTING.md](TESTING.md).
+two boots with PLAY at different moments must start different phrases; a fourth boot saves and reloads a
+project on a writable card. See [TESTING.md](TESTING.md).
 Cycles, memory totals and hardware behaviour are not measured.
 
 ## Implementation
@@ -95,8 +111,14 @@ so a moved note is the note released.
 `turing.c` is the engine and the row getters and setters; `generate.py` compiles it to the checked-in
 `turing.s`, appends `hooks.s` and refuses an instruction that both auto-modifies and addresses through one
 register (GCC produced one; it wrote every byte one address high). The unit is linked into the platform
-runtime in DRAM. Settings are a 32-byte checksummed record at `0x100ffe00` in battery RAM that stock never
-references; an invalid record reads as every track OFF.
+runtime in DRAM. The live settings are a 32-byte checksummed record at `0x100ffe00` in battery RAM that
+stock never references; an invalid record reads as every track OFF.
+
+The project file uses four more detours, each beside one of Scale Quantizer's rather than on it, so the
+two build together without sharing a site: the loader after its frame is set up (`0x400866ee`, reset on
+the storing pass), the loader's next-line point (`0x40088224`, which every complete line reaches,
+quantizer's included), the serializer one block after quantizer's (`0x400888d2`) and the project defaults
+(`0x40025ad4`).
 
 ## Authorship and licences
 
