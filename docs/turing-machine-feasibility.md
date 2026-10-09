@@ -477,6 +477,26 @@ Results and limits are in the draft's TESTING.md. Not yet done: project or Part 
 
 ### M2: v0.1 release quality (still S0)
 
+**Status, 8 October 2026** (branch `cursor/turing-machine-m2-06d4`, draft in `sdk/drafts/turing-machine/`):
+
+- Done in the emulator:
+  - per-track MODE, LOCK and LENGTH (2–16), on all eight MIDI tracks;
+  - four MIDI SEQUENCER rows, where TURING TRACK picks the track the other rows edit;
+  - a checksummed battery-RAM record at `0x100ffe00`;
+  - the boot seed, taken from DMA timer 3's free-running count at the first Turing trig after PLAY, with a fixed test seed the emulator can write;
+  - a gate that checks every note against a model of the engine;
+  - new screenshots and a thumbnail.
+- Done since (9 October 2026): **per-project settings** at Turing's own sites, chosen over a shared bridge with Scale Quantizer. Each sits beside one of quantizer's: the loader entry `0x400866ee`, the loader's next-line point `0x40088224`, the serializer block `0x400888d2` and the project defaults `0x40025ad4`. A track not at the defaults is saved as `#TURING_T<n>=<mode>,<lock>,<length>`.
+- **Integration with other modules, later:**
+  - `0x40088224` is the obvious site for any module that reads its own `#` lines. A second module choosing it would be refused by the ledger, and that is the moment to replace both, and quantizer's, with one shared project-lines bridge.
+  - The same applies at scale stage S3, when Turing and quantizer start sharing settings.
+  - Per-Part storage is a separate question: the only known free run in the Part window is MIDI Scenes'.
+- Still open:
+  - `evidence/performance.json` (`cfmeter.py` under a MIDI flood);
+  - `module:verify`, which needs the Docker toolchain image;
+  - the catalog entry and release notes;
+  - the hardware report.
+
 - LENGTH 2–16; all eight MIDI tracks (one register per track, a shared enable mask).
 - **A different first phrase after every boot** (requested 8 October 2026). M1 seeds each track's register from a fixed constant, so the first phrase repeats across boots. Candidates, to be measured before choosing:
   - keep the generator state in battery RAM and carry it across power cycles, as the settings already are;

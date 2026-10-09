@@ -10,7 +10,7 @@
     "note": "Native octabam build of this module alone (make bus) from the local stock 1.40C; the image is never committed."
   },
   "firmware": "1.40C",
-  "imageSha256": "3ef31261ded02280b85498049cfdc0dabb39b55f49cb079df4f37d03cc4fb6eb",
+  "imageSha256": "47b44879f5c4ffe414e4d97b5a197342352dde6c5367206525725070c4f638a4",
   "emulatorSha256": "2360ffb244833bc015cdc84ecc36394758bf93952034a8b08a63e1955af85115",
   "setup": "Headless ot_emu; MKII panel; stopped transport; 128\u00d764 LCD at integer scale 6.",
   "palette": {
@@ -97,6 +97,11 @@
     },
     {
       "press": [
+        "DOWN"
+      ]
+    },
+    {
+      "press": [
         "RIGHT"
       ]
     },
@@ -112,15 +117,26 @@
       }
     },
     {
+      "press": [
+        "DOWN"
+      ]
+    },
+    {
+      "encoder": {
+        "name": "LEVEL",
+        "delta": -8
+      }
+    },
+    {
       "wait": 200
     },
     {
-      "capture": "ot-rows-locked.png"
+      "capture": "ot-rows-set.png"
     }
   ],
   "screenshots": {
     "ot-location.png": "8f9a1e191c5f8593fd077d9f6340e4485a1a452f48cb0ea5ecaaf4c5a0a0b9c9",
-    "ot-rows-default.png": "8e1f2447344d7f29ae810499ee28140b2e536223b24cbb59d27df2dc49765bc8",
-    "ot-rows-locked.png": "4621ef9a5ca19cc7f1d053dfdf1c562e427255eab110af5f3db5da6d7ab1e364"
+    "ot-rows-default.png": "16346e51c44a57fa1ed287dbf47aef20776002bdf29c66df30703a09bc7d6678",
+    "ot-rows-set.png": "529b90700450a48be747645bfc66d35073520493b62a4ac9bbae7f8ac5da3681"
   }
 }
