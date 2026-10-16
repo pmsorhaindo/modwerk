@@ -149,7 +149,7 @@
         "shows": "location",
         "firmware": "1.40C",
         "moduleVersion": "0.1.0-experimental",
-        "imageSha256": "47b44879f5c4ffe414e4d97b5a197342352dde6c5367206525725070c4f638a4",
+        "imageSha256": "f2ce92f57b2fbe5cce4d2611ffbdb07d7b47b3149084718da7b32b1831199a9d",
         "setup": "Headless ot_emu built from this repository's tools/emu/ot_emu (emulator SHA-256 2360ffb24483...); MKII panel; native octabam image of TURING MACHINE alone; empty scratch card; transport stopped; actual 128x64 LCD at integer scale 6 in monochrome. Panel plan in media/capture.json."
       }
     },
@@ -166,7 +166,7 @@
         "shows": "controls",
         "firmware": "1.40C",
         "moduleVersion": "0.1.0-experimental",
-        "imageSha256": "47b44879f5c4ffe414e4d97b5a197342352dde6c5367206525725070c4f638a4",
+        "imageSha256": "f2ce92f57b2fbe5cce4d2611ffbdb07d7b47b3149084718da7b32b1831199a9d",
         "setup": "Headless ot_emu built from this repository's tools/emu/ot_emu (emulator SHA-256 2360ffb24483...); MKII panel; native octabam image of TURING MACHINE alone; empty scratch card; transport stopped; actual 128x64 LCD at integer scale 6 in monochrome. Panel plan in media/capture.json."
       }
     },
@@ -183,7 +183,7 @@
         "shows": "controls",
         "firmware": "1.40C",
         "moduleVersion": "0.1.0-experimental",
-        "imageSha256": "47b44879f5c4ffe414e4d97b5a197342352dde6c5367206525725070c4f638a4",
+        "imageSha256": "f2ce92f57b2fbe5cce4d2611ffbdb07d7b47b3149084718da7b32b1831199a9d",
         "setup": "Headless ot_emu built from this repository's tools/emu/ot_emu (emulator SHA-256 2360ffb24483...); MKII panel; native octabam image of TURING MACHINE alone; empty scratch card; transport stopped; actual 128x64 LCD at integer scale 6 in monochrome. Panel plan in media/capture.json."
       }
     }

@@ -1218,26 +1218,6 @@ tm_track_names:
 	.string	"T6"
 	.string	"T7"
 	.string	"T8"
-	.globl	tm_label_length
-	.type	tm_label_length, @object
-	.size	tm_label_length, 14
-tm_label_length:
-	.string	"TURING LENGTH"
-	.globl	tm_label_lock
-	.type	tm_label_lock, @object
-	.size	tm_label_lock, 12
-tm_label_lock:
-	.string	"TURING LOCK"
-	.globl	tm_label_mode
-	.type	tm_label_mode, @object
-	.size	tm_label_mode, 12
-tm_label_mode:
-	.string	"TURING MODE"
-	.globl	tm_label_edit
-	.type	tm_label_edit, @object
-	.size	tm_label_edit, 13
-tm_label_edit:
-	.string	"TURING TRACK"
 
 | Appended to the generated turing.s by generate.py.
         .text
@@ -1329,6 +1309,20 @@ tm_defaults_hook:
         lea     16(%sp),%sp
         clr.l   0x100b14de          | displaced, last: the caller sees its flags
         rts
+
+| The row labels the stock page's grown label table points at. They are in
+| .text, as Scale Quantizer's are: the browser builder and native octabam
+| place a DRAM unit's .rodata differently, and only this text is reached
+| from the OS image.
+        .global tm_label_edit, tm_label_mode, tm_label_lock, tm_label_length
+tm_label_edit:
+        .asciz  "TURING TRACK"
+tm_label_mode:
+        .asciz  "TURING MODE"
+tm_label_lock:
+        .asciz  "TURING LOCK"
+tm_label_length:
+        .asciz  "TURING LENGTH"
 
 | Explicitly initialized, loader-owned DRAM: a DRAM unit's .bss is never
 | cleared. The C's static assertions check the sizes.

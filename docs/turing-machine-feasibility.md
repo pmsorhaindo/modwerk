@@ -493,7 +493,7 @@ Results and limits are in the draft's TESTING.md. Not yet done: project or Part 
   - Per-Part storage is a separate question: the only known free run in the Part window is MIDI Scenes'.
 - Still open:
   - `evidence/performance.json` (`cfmeter.py` under a MIDI flood);
-  - `module:verify`, which needs the Docker toolchain image;
+  - ~~`module:verify`~~ done 16 October 2026 with the official toolchain image: 114 selections, 48 built matching native, 66 matching refusals, 0 mismatches, after moving the row labels into `.text` (draft TESTING.md);
   - the catalog entry and release notes;
   - the hardware report.
 

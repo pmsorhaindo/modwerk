@@ -89,6 +89,20 @@ tm_defaults_hook:
         clr.l   0x100b14de          | displaced, last: the caller sees its flags
         rts
 
+| The row labels the stock page's grown label table points at. They are in
+| .text, as Scale Quantizer's are: the browser builder and native octabam
+| place a DRAM unit's .rodata differently, and only this text is reached
+| from the OS image.
+        .global tm_label_edit, tm_label_mode, tm_label_lock, tm_label_length
+tm_label_edit:
+        .asciz  "TURING TRACK"
+tm_label_mode:
+        .asciz  "TURING MODE"
+tm_label_lock:
+        .asciz  "TURING LOCK"
+tm_label_length:
+        .asciz  "TURING LENGTH"
+
 | Explicitly initialized, loader-owned DRAM: a DRAM unit's .bss is never
 | cleared. The C's static assertions check the sizes.
         .balign 4

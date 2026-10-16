@@ -13,11 +13,6 @@ _Static_assert(sizeof(TmTestSeed) == 12, "battery-RAM test seed record");
 #define TEST_SEED ((volatile TmTestSeed *)TM_NV_TEST_SEED)
 #define WORD(address) (*(volatile uint32_t *)(address))
 
-const char tm_label_edit[] = "TURING TRACK";
-const char tm_label_mode[] = "TURING MODE";
-const char tm_label_lock[] = "TURING LOCK";
-const char tm_label_length[] = "TURING LENGTH";
-
 static const char tm_track_names[TM_TRACKS][3] = {"T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"};
 static const char tm_mode_names[2][4] = {"OFF", "ON"};
 static char tm_number_text[4];

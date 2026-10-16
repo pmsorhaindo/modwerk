@@ -1,6 +1,8 @@
 # Turing Machine testing
 
-M2 in progress, 9 October 2026 (per-project settings added). Emulator only; nothing here ran on hardware.
+M2 in progress, 16 October 2026 (re-run on a fresh machine after the branches were brought up to date with
+the fork's `main`; row labels moved into `.text` after `module:verify`). Emulator and toolchain only; nothing
+here ran on hardware.
 
 ## Commands and exact revision
 
@@ -9,25 +11,32 @@ Sources in `sdk/drafts/turing-machine/` at this branch (`cursor/turing-machine-m
 
 | File | SHA-256 |
 |---|---|
-| `turing.c` | `839d456db340e8019507a10a65bb35ef028d80a8e44f8d88660d2252e6578cf3` |
-| `hooks.s` | `9c1d6f992a611ca5aea2a4662a30ce3829323391d30459350cf0d1166e87f0b9` |
-| `turing.s` | `f18b8db578b6b65520948df3a3c5801ab987b4dd4b5f7369f0d15c20dce04211` |
-| `verify.py` | `ab71590fe0e12754b12e8f86706a150f3ede331e9d986534ed3e63484dba48f7` |
+| `turing.c` | `cea03b82a120ca63b53349fe6c0f2a4180fe0c793fddb1c04e63fb9d97502387` |
+| `hooks.s` | `7ba973de52def25c566b2a493e639dd733adad872f7af0e13d1ddd284e0184fb` |
+| `turing.s` | `06d761928ad8e989804539d8b7f3698b5e2cf0c62206719b3f09ea7eadde7eb5` |
+| `verify.py` | `4ac78842c9b752e92c49229938ca01fa9d085f6ef22a9a94369583f4b109d81f` |
 
-Toolchain: m68k-elf-gcc 16.2.0 and GNU binutils 2.47, built from the release archives pinned in
-`sdk/build/Dockerfile`. `python3 generate.py --check` confirms `turing.s` matches `turing.c` and `hooks.s`
+Toolchain: the official `modwerk-source-tools` image, built on this machine with
+`docker build --file sdk/build/Dockerfile --tag modwerk-source-tools .` (image `sha256:da50c792…9b`): m68k-elf-gcc
+16.2.0 and GNU binutils 2.47 from the archives pinned there, and the patched DSP assembler. The native
+image builds below use that image's `/usr/local` toolchain copied to the host; the emulator and `dsp_host`
+are built from this repository's sources at the pinned vendor revisions. `python3 generate.py --check` confirms `turing.s` matches `turing.c` and `hooks.s`
 and contains no instruction that both auto-modifies and addresses through one register.
 
-Base: stock OS 1.40C, MAIN OS SHA-256 `164f3122…0a84e` (matches
-`src/engine/assets/stock-dsp-metadata.json`), extracted with `src/engine/elek.ts` and kept outside the
-repository with every image built from it.
+Base: stock OS 1.40C from Elektron's official download (the zip `scripts/fetch-os.sh` names, SHA-256
+`370c55a3…573ff0` as recorded there; `OCTATRACK_OS1.40C.bin` `34695b60…99e1ad`, identical to the owner's
+copy used before). MAIN OS SHA-256 `164f3122…0a84e` (matches `src/engine/assets/stock-dsp-metadata.json`),
+extracted with `src/engine/elek.ts` and kept outside the repository with every image built from it.
 
 Native builds in a copy of `sdk/octabam` (`make bus REMIX=<name>`):
 
 | Remix | Modules | Result | Image SHA-256 (local, not committed) |
 |---|---|---|---|
-| `turing` | TURING MACHINE | built: three MIDI SEQUENCER tables grown to 1+4 entries, five detours (the note hook and four project sites), row count 1 → 5 | `47b44879…c4f638a4` |
-| `turing-mix` | TURING MACHINE, SCALE QUANTIZER, EUCLID, CC MAP | built; no ledger refusal | `402ca72a…a0b31507` |
+| `turing` | TURING MACHINE | built: three MIDI SEQUENCER tables grown to 1+4 entries, five detours (the note hook and four project sites), row count 1 → 5 | `f2ce92f5…31199a9d` |
+| `turing-mix` | TURING MACHINE, SCALE QUANTIZER, EUCLID, CC MAP | built; no ledger refusal | `2cc1c461…364c6ef82` |
+
+Before the label fix, the same sources rebuilt the images recorded on 9 October byte for byte
+(`47b44879…c4f638a4`, `402ca72a…a0b31507`), with the image's toolchain on a fresh machine.
 
 ## Emulator results
 
@@ -75,6 +84,13 @@ the panel; T1 is set again and the project saved, T1 set back to OFF and the pro
 
 The same 26 checks on `turing-mix`: all pass.
 
+Runs: on 16 October all 26 checks passed on both images before the label fix (`47b44879…`, `402ca72a…`)
+then on both images after it (`f2ce92f5…`, `2cc1c461…`), the current sources. One intermediate run on the
+fixed combined image failed "after SAVE, T1 set back to OFF": the menu edit after SAVE did not take, as
+when SAVE is still writing (that run shared the machine with `npm run check`). The gate now waits until the
+card's written-sector count stops changing after creating, saving and reloading a project, never less than
+the previous fixed waits, and the rerun passed all 26 on both images.
+
 A separate save on `turing-mix`, read back from the card: `project.work` and `project.strd` hold
 `#SEQUENCER_SCALE=0`, `#SEQUENCER_ROOT=0`, `PATTERN_CHANGE_AUTO_SILENCE_TRACKS=0`, `#TURING_T1=1,127,8`,
 `PATTERN_CHANGE_AUTO_TRIG_LFOS=0`, in that order: both modules' lines, each from its own site.
@@ -82,7 +98,45 @@ A separate save on `turing-mix`, read back from the card: `project.work` and `pr
 Separately, with the scratch `uart0` build, every MODE OFF on the `turing` image: the MIDI OUT bytes for a
 four-trig pattern were identical to stock 1.40C's.
 
+## Toolchain check: `module:verify`
+
+`npm run module:verify -- turing-machine --os <OCTATRACK_OS1.40C.bin> --jobs 2`, 16 October 2026, with the
+official image above. The module is not listed, so the run used a disposable local worktree of this branch
+that listed it the way ADD_A_MODULE step 4 does, and nothing from that worktree is committed:
+
+- the folder copied to `sdk/octabam/modules/turing-machine/`, a `sdk/catalog.json` pin
+  (`0.1.0-experimental`), `turing-machine` appended to `REQUESTED` in `scripts/build-module-packages.py`;
+- packages compiled in the image with `scripts/build-modules-isolated.sh` and imported with
+  `npm run modules:import -- … --development`;
+- the module's document appended to `src/catalog/module-documents.json` by hand, because
+  `modules:generate` refuses an unqualified module (no cycles, memory or hardware evidence yet).
+
+First run: 0 of 48 buildable selections matched native, 66 refusals matched. A byte diff of Turing alone
+(native image written with `export-composition-proofs.py --image-dir`, outside the checkout, deleted after)
+showed one difference: 14 bytes of the grown MIDI SEQUENCER label table. The row labels were C `const`
+strings in `.rodata`; the browser and native place a DRAM unit's `.rodata` differently, and the stock table
+points at them. Fixed by defining the labels in `hooks.s`'s `.text`, as Scale Quantizer does.
+
+After the fix: **114 selections, 48 built and matching native outside the platform writes, 66 matching
+refusals, 0 mismatches.** The record is [evidence/native-comparison.json](evidence/native-comparison.json)
+(fingerprints only; module source `1c1f3475…`, pool of 17 modules). The refusals are space and overlap
+refusals that browser and native agree on: 44 Scale Quantizer and FM Synth claiming one cave, 10 FM Synth
+and VECTOR claiming one hook site, 7 label formatters not fitting, 2 Mute Modes' cave not free, 2 past the
+stock zero run, 1 an FX1 chooser list too long. 32 of them are refused without Turing as well, by the other
+modules' own records; 34 have no record without Turing; none builds without Turing and fails with it.
+
+Native declaration checks were recorded for 27,904 selections (written to the worktree's
+`src/catalog/native-metadata.json`, not committed).
+
+Listing the module (M2's catalog step) needs, beyond this folder: the folder in `sdk/octabam/modules/`,
+the `sdk/catalog.json` pin, `turing-machine` in `REQUESTED` in `scripts/build-module-packages.py`, the
+rebuilt packages, its `src/engine/assets/chooser-metadata.json` entry (`fxId` null, not on FX1), the
+declaration checks and `sdk/native-comparisons/turing-machine.json`. The qualification record must exist
+first.
+
 ## Fixed on the way
+
+`module:verify` found the row labels' `.rodata` placement above.
 
 GCC 16.2 compiled the settings write into `move.b (%a0)+,(%a0,%d1.l)`. The CPU forms the destination after
 the source's increment, so every byte of the record landed one address high, the record never validated,
@@ -99,7 +153,6 @@ and each row edit started again from the defaults. Seen in the emulator as a rec
 - DMA timer 3 on a unit: the seed source is inferred from stock's own programming of the timer.
 - Timing and load: no cycle count, no `cfmeter.py` run, no MIDI flood. `evidence/performance.json` is not
   written.
-- The browser builder (`npm run module:verify`); the module is not in `sdk/catalog.json`.
 - Hardware.
 
 ## Stock flows

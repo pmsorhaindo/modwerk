@@ -383,6 +383,21 @@ def timer_seed_run(image, work, wait_ms):
         port.quit()
 
 
+def settle_card(port, at_least_ms=4000, at_most_ms=90000):
+    """Run until the firmware stops writing the card: a project create, SAVE or RELOAD ends with its last
+    sector, and its progress screen eats the keys sent before then."""
+    ran, last, quiet = 0, None, 0
+    while ran < at_most_ms:
+        port.run(2000)
+        ran += 2000
+        written = port.cmd("card status", b"card").split("written=")[1].split()[0]
+        quiet = quiet + 1 if written == last else 0
+        last = written
+        if ran >= at_least_ms and quiet >= 2:
+            return
+    raise SystemExit(f"verify_turing: the card was still being written after {at_most_ms} ms")
+
+
 def project_menu(port, downs):
     """PROJ > PROJECT list item `downs` rows below CHANGE (SAVE 1, RELOAD 2, the set's CHANGE 6)."""
     port.press("MENU")
@@ -413,7 +428,7 @@ def project_run(image, work):
         for _ in range(5):                  # <CREATE NEW SET>, its name, the set, <CREATE EMPTY PROJECT>, its name
             port.press("YES")
             port.run(2500)
-        port.run(25000)
+        settle_card(port, at_least_ms=25000)
         s = settings(port)
         check("new project: every track starts OFF", s["valid"] and s["enabled"] == 0
               and s["lock"] == [64] * 8 and s["length"] == [16] * 8, f"{s}")
@@ -422,7 +437,7 @@ def project_run(image, work):
         close_page(port)
         project_menu(port, 1)               # SAVE
         port.press("YES")
-        port.run(20000)
+        settle_card(port, at_least_ms=20000)
         open_page(port)
         set_track(port, 1, False, 64, 16)
         close_page(port)
@@ -430,7 +445,7 @@ def project_run(image, work):
         check("after SAVE, T1 set back to OFF", s["valid"] and s["enabled"] == 0, f"{s}")
         project_menu(port, 2)               # RELOAD
         port.press("YES")
-        port.run(25000)
+        settle_card(port, at_least_ms=25000)
         s = settings(port)
         check("RELOAD restores the saved T1 ON 127/8", s["valid"] and s["enabled"] == 1
               and s["lock"][0] == 127 and s["length"][0] == 8, f"{s}")

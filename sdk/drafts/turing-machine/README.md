@@ -111,7 +111,8 @@ so a moved note is the note released.
 `turing.c` is the engine and the row getters and setters; `generate.py` compiles it to the checked-in
 `turing.s`, appends `hooks.s` and refuses an instruction that both auto-modifies and addresses through one
 register (GCC produced one; it wrote every byte one address high). The unit is linked into the platform
-runtime in DRAM. The live settings are a 32-byte checksummed record at `0x100ffe00` in battery RAM that
+runtime in DRAM. The four row labels are in `hooks.s`'s `.text`: the stock label table points straight
+at them, and the browser builder and native octabam place a DRAM unit's `.rodata` differently. The live settings are a 32-byte checksummed record at `0x100ffe00` in battery RAM that
 stock never references; an invalid record reads as every track OFF.
 
 The project file uses four more detours, each beside one of Scale Quantizer's rather than on it, so the
