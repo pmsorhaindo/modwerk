@@ -1,8 +1,14 @@
 # Cube oscillator: a Piston Honda Mk3-style machine for the Octatrack
 
-Status: design only, 23 October 2026. No firmware, no DSP image, and no module
-is added here. This note is the behaviour target and the fitting plan for a
-new Octatrack **track machine** in this fork (`pmsorhaindo/modwerk`).
+Status: design only, 23 October 2026, with a dynload addendum the same day.
+No firmware, no DSP image, and no module is added here. This note is the
+behaviour target and the fitting plan for a new Octatrack **track machine**
+in this fork (`pmsorhaindo/modwerk`).
+
+CUBE is one machine among the others. Any one track can run it, or several,
+or all eight. Every track that does not stays a stock machine (FLEX, STATIC,
+THRU, NEIGHBOR, PICKUP) or another contributed machine whose price fits that
+core. The goal is not an instrument that only plays this oscillator.
 
 The behaviour target is the Industrial Music Electronics Piston Honda Mark III
 (model 1991, firmware manual v1.1): a dual wavetable oscillator with an
@@ -330,7 +336,7 @@ That split is the one to copy:
 |---|---|---|
 | Chooser row, SRC labels, Part signature, project bytes | ColdFire, through `ot_machines` | Analog BD, FM Synth, POLY8 |
 | Note-rate or trig-rate decisions | ColdFire, on the stock trig | Turing (MIDI notes), Euclid (transport) |
-| Phase, morph playback, FM, sync | DSP56300, both payloads, resident | Analog BD’s source seam |
+| Phase, morph playback, FM, sync | DSP56300, one shared image per core, uploaded while stopped | Analog BD’s source seam for the render; dynload for the bytes ([section 5](#5-loading-cube-per-track-through-dynload)) |
 
 CUBE does not hook Turing’s MIDI-out site and does not link Turing’s code.
 A MIDI track is a different machine. Eight audio tracks of CUBE are eight
@@ -363,12 +369,17 @@ The USB runtime allocator does subtract source voices from that allowance
 | 1 | 1–4 | 3565 | 2736 | **829** |
 
 Until a module carries a hardware cycle figure, a modelled price is
-charged at **7/4** (the owner’s MKII measured emulator claims at 1.42–1.74×
-on 11 October 2026, `dsp.c`). A voice that must run on all four tracks of
-the tight core, beside stock FX still being selectable, has about
-`384 / 4 = 96` charged cycles, which is about **55 modelled cycles** after
-the 7/4 factor. That is the design target for the per-sample loop. The
-expensive morph is not allowed to live in that loop (section 4).
+charged at **7/4**, rounded as `(cycles * 7 + 3) / 4` (`dsp.c`). The owner’s
+MKII measured emulator claims at 1.42–1.74× on 11 October 2026. A voice
+that must run on all four tracks of the tight core, beside stock FX still
+being selectable, has `384 / 4 = 96` charged cycles. The integer charge of
+a **55**-cycle model is `(55 * 7 + 3) / 4 = 97`, and four of those are 388,
+which misses the 384 remainder by four. A **54**-cycle model charges 95,
+and four of those are 380, leaving four charged cycles. **54 modelled
+cycles, and a per-core engine price of 0**, is the design target for the
+per-sample loop. The expensive morph is not allowed to live in that loop
+(section 4). The instance table in [section 5](#5-loading-cube-per-track-through-dynload)
+uses this arithmetic.
 
 A track the core cannot carry “renders stock’s silent source”
 (`EVENTS.md`, `ot_machines`). Price the worst voice honestly so a fifth
@@ -390,25 +401,25 @@ notes leave several sequencer paths unmeasured on hardware. The runtime
 `dsp.c` header says that loader is how USB-installed effect code is
 admitted, and labels that path development only.
 
-This study was asked to treat dynload as **breaking the sequencer on real
-hardware**. That failure was not reproduced in this session. The design
-does not depend on the loader:
+The voice should be **one shared DSP image per core**, uploaded through
+that layer while the transport is stopped, then selected per track. Stock
+machines stay on the tracks that did not select CUBE. That is [section 5](#5-loading-cube-per-track-through-dynload).
+It is not a reason to link a private copy of the oscillator into both
+payloads the way Analog BD does, and it is not a request to turn every
+track into this machine.
 
-- The voice is **resident** in both payloads, the way Analog BD’s engine
-  is linked and uploaded before audio, not demand-loaded when a pattern
-  changes.
-- Code is not moved while the transport is running. The resident-engine
-  note (`docs/OCTATRACK_RESIDENT_ENGINES_ON_DEMAND.md`) already requires
-  placement only while the sequencer is stopped, because a bad DSP move
-  can stall frames and stick the sequencer.
-- The `source_kind` price is still the right admission number, so a later
-  USB build can refuse an overload. Calling the dynload *uploader* to
-  fetch the voice on pattern change is out of scope until that layer is
-  shown, on hardware, not to disturb the sequencer.
+Michael reports that, on real hardware, **any image which includes the
+dynload platform never starts the sequencer**, including an image with
+Turing left out and including an image after a 16-byte alignment fix of
+the transport mailboxes. This session did not reproduce that. No CUBE
+package is uploaded until that start works. The resident-engine note
+(`docs/OCTATRACK_RESIDENT_ENGINES_ON_DEMAND.md`) still applies: code moves
+only while the sequencer is stopped, because a bad DSP move can stall
+frames and stick the sequencer.
 
 USB install of the ColdFire machine record (chooser, page, Part signature,
 Keep/Undo) can follow the base’s existing machine lifecycle. The DSP bytes
-ride in the image. They are not a dynload package.
+are a source package admitted by the same transport, not an effect slot.
 
 ### Pages, locks, and the rules that already exist
 
@@ -573,16 +584,17 @@ it is owned (BusVerb, `AGENTS.md`). Do not place the cube there.
 | Data | Home | Size |
 |---|---|---|
 | Cube, 16-bit PCM | ColdFire DRAM, one copy | 262,144 bytes |
-| Current cycle for the track | DSP X or Y, per core, four tracks | 256 words × 4 = 1,024 words |
-| Voice state (phase, FM, morph cursor, trig) | same region | about 16 words × 4 |
-| Program | resident P on **both** payloads, one copy per core, not per track | aim under 400 words |
+| Current cycle for the track | DSP X or Y, per CUBE track, on that track’s core | 256 words. Four tracks on one core: 1,024 words |
+| Voice state (phase, FM, morph cursor, trig) | same region, per CUBE track | about 16 words. Four tracks: about 64 |
+| Program | Dynload P arena, one image per core that has a CUBE track, not per track and not a static cave beside stock | aim under 400 words |
 
 1,024 words is modest next to 36K and still has to be a **measured** hole
-on both payloads. Stock table bases differ between payload A and B
-(`AGENTS.md`: a bare literal that is right on A is wrong on B). The build
-supplies the base per payload. Analog BD’s X addresses are that module’s;
-they are not a donation CUBE may take. Placement is a measurement task
-before any word is claimed. Analog BD’s upload path also has a 256 KiB
+on both payloads. The program does not take that hole: it uses the
+build-owned dynload arena, one copy per core, shared by every CUBE track
+on it. Stock table bases differ between payload A and B (`AGENTS.md`: a
+bare literal that is right on A is wrong on B). The build supplies the
+base per payload. Analog BD’s X addresses are that module’s; they are not
+a donation CUBE may take. Analog BD’s upload path also has a 256 KiB
 staging limit (`DSP909.md`). An unpacked 24-bit cube (about 384 KiB) does
 not fit that path. Another reason to keep the cube in DRAM and upload only
 the working cycle.
@@ -609,9 +621,11 @@ Per sample, per sounding oscillator, after the cycle is already mixed:
 over the same 256 words, about **+15–20**. FM is a few more arithmetic
 ops on the increment, about **+8–12**. Hard morph (MORPH = 0) never builds
 a new cycle, so the per-sample total stays near **30–55** modelled cycles
-for A+B. That is the number that can sit in the 55-modelled-cycle target
-on core 0 with four tracks. It has to be counted with `cycle_count.py`
-before it is believed; the figures here are estimates.
+for A+B. The top of that range charges 97 and does not fit four times on
+core 0 (388 against a 384 remainder). The counted loop has to land at
+**54** modelled cycles, 95 charged, or the fourth track on tracks 5–8
+stays silent. It has to be counted with `cycle_count.py` before it is
+believed; the figures here are estimates.
 
 Drop-sample playback (ignore the fraction) is cheaper and harsher.
 **Uncertain** whether the hardware does it. It is not the default. It can
@@ -678,11 +692,13 @@ plays. A reset click on a user table is the table.
 | If the price does not fit | That track stays silent (the `ot_machines` rule). Do not steal cycles from another track’s FX. |
 
 Declare `source_voice` as the measured per-sample cost of A+B with FM and
-hard morph, and `source_engine` as 0 if the morph rebuild is inside the
-voice price, or as the measured per-core overhead if the corner-table
-transfer is shared. Kind is modelled until a hardware figure exists, so
+hard morph, and `source_engine` as 0. A non-zero engine price is charged
+once per core on top of every voice (`dsp.c`), and core 0’s four-voice
+margin at the 54-cycle target is four charged cycles, so an engine price
+does not fit there. Kind is modelled until a hardware figure exists, so
 the 7/4 charge applies. Four CUBE tracks on core 0 must still leave every
-FX slot its 342-cycle reserve.
+FX slot its 342-cycle reserve. The per-track instance table is in
+[section 5](#instances-memory-and-cycles).
 
 ### Fixed-point habits already paid for
 
@@ -711,47 +727,407 @@ it the way Analog BD compares `dsp909.Voice`. Agreement within a stated
 residual (a few LSB at Orthodox, exact at the 8-bit mask) is the bar.
 A listening render is not that bar.
 
-## 5. Milestones and risks
+## 5. Loading CUBE per track through dynload
+
+This section is the loading plan. Sections 1–4 are unchanged as the
+sound and the sample loop. Nothing here is a module, a firmware image,
+or a measurement made on a unit during this study.
+
+### How the platform works today
+
+**Documented** (`sdk/octabam/platform/dsp-dynload/README.md`,
+`sdk/octabam/platform/dsp-dynload-transport/README.md`, `PUBLICATION.md`,
+`transfer.h`, `allocator.c`, `buffers.h`, and
+`sdk/machines/octatrack/elekloader/dsp.c`).
+
+Two pieces sit in the base:
+
+| Piece | What it owns |
+|---|---|
+| `platform/dsp-dynload` | Which program is resident, and the publication guards around pattern, Part, and project changes |
+| `platform/dsp-dynload-transport` | The frame mailbox that moves words onto a core and binds them |
+
+The ColdFire side does not write DSP program memory itself. On an idle
+audio frame the state-7 eDMA extension sends one **64-halfword** packet
+to each core (idle bank +0x320) and reads a **32-halfword** status block
+back (+0x360). The mailboxes are private per core: X:`0x2320`–`0x235f`
+and X:`0x4320`–`0x435f` for the packet, X:`0x2360`–`0x237f` and
+X:`0x4360`–`0x437f` for status. Software and DMA both use the uncached
+alias of the ColdFire buffers (`UNCACHED` adds `0x08000000`). The
+checksum detects a torn packet. It is not authentication.
+
+Opcodes in `transfer.h`:
+
+| Opcode | Role |
+|---|---|
+| PROBE | Packet check, acknowledgement, no store |
+| STAGE | Diagnostic: 24 words into a build-owned 128-word P table. The transport README’s probe does not execute them |
+| WRITE | Up to 24 program words into the build-owned arena. The DSP checks the range, reads the chunk back, and returns the sum |
+| BIND | Point a dispatch id at an init/proc pair inside that arena |
+| UNBIND | Restore that id’s original entry |
+| BYPASS | Point an unbound id at a null stub, so a route nobody guarded goes dry instead of into reclaimed code |
+| BASE | One entry of the eight-word Y-buffer table at X:`0x255` (an effect’s delay memory, not a machine) |
+
+Sequence zero is skipped. A missing reply ages out after **64 frames**
+(`dl_frame`). The frame interrupt must acknowledge DMA channel 1, restore
+that channel’s byte count, and restore the host core selector to core 0
+before the next frame. The transport README records why: the stock frame
+sends its first command without selecting core 0, and forgetting the
+restore sent the command to core 1 and **stopped both DSPs after three
+frames in the emulator**. That repair was not tested on hardware.
+
+The UI task owns allocation, file I/O, waiting, and the popup (`DSP
+MEMORY FULL`, `DSP OVERLOAD`, `DSP LOAD FAILED`). The sequencer callback
+and the DMA interrupt must not do those. Guards cover a queued pattern,
+a stopped request, LOAD PROJECT, the chain restart on STOP, and PASTE /
+RELOAD / RESET of the Part. Many live-effect writers are still unguarded;
+`dl_unguarded` counts a live set that reaches the DSP unprepared. Static
+originals stay resident. Do not reclaim them on the strength of the
+emulator gates.
+
+What the allocator actually admits is **effects**. Sixteen instances, two
+per track (FX1, then FX2). Tracks 0–3 (panel tracks 1–4) sit on core 1;
+tracks 4–7 (panel tracks 5–8) sit on core 0. One algorithm’s program is
+reserved **once per core** and shared by every slot that selected it.
+Per-slot memory is the effect’s Y block, handed out through X:`0x255`,
+not a copy of the program. The arena in the experiment’s README is a
+build-owned P table: 64 words of saved dispatch entries and 1,344 words
+of code. The processing allowance is the stock scheduling allowance
+(`MODWERK_DSP_ALLOWANCE0` 3120, `MODWERK_DSP_ALLOWANCE1` 3565). The P
+allocator does not invent a second cycle budget. `dsp.c` then subtracts
+source-machine voices *before* those effect slots, and each of the eight
+slots on a core still costs at least `MODWERK_DSP_RESERVE` (342).
+
+`elekloader/dsp.c` is the USB runtime that fills this catalog from module
+packages. Its header labels that path development only.
+
+### Selecting it on one track beside stock machines
+
+A machine and an effect are different selections.
+
+The panel’s machine chooser is the ColdFire `ot_machines` record: label,
+Part signature, page, and the source price. A track is CUBE only when its
+machine type byte is the FLEX/STATIC backing value (0 or 1) **and** its
+signature matches CUBE (`machine_registry.c`, `owner`). A stock track
+(type byte above 1, or a backing byte with no contributed signature) does
+not take that row. Its source renderer stays stock. `claim` charges
+`source_voice` on that track and `source_engine` once on that track’s
+core; `release` drops the voice, and the engine drops when the last track
+on the machine releases. A track the core cannot carry is unchanged and
+renders stock’s silent source.
+
+So the coexistence rule is the ordinary one:
+
+- CUBE on track 1, FLEX on track 2: core 1 pays one CUBE voice. Track 2
+  keeps the stock FLEX source and both of its effect slots. No CUBE state
+  is allocated for it.
+- The same on any mix of STATIC, THRU, NEIGHBOR, and PICKUP.
+- Another contributed DSP machine on the same core adds its own voice and
+  engine to the **same** remainder. Tracks on the other core do not see
+  that sum. Payload A (tracks 5–8, core 0) and payload B (tracks 1–4,
+  core 1) are separate budgets.
+- Leaving the machine, or removing the module, releases the voice before
+  the module’s memory goes (`modwerk_machine_tables_changed`).
+
+Dynload’s BIND path does **not** perform that selection. BIND writes an
+effect init/proc id. The sixteen catalog slots are FX1 and FX2. CUBE must
+not be registered as an effect id: that would displace a reverb or a
+filter and would still not appear in the machine chooser. The platform
+README says the experiment adds no chooser and no controls.
+
+What dynload should do for this voice, once [the sequencer starts](#the-sequencer-does-not-start):
+
+1. The ColdFire record is selected per track, as above. That is the only
+   chooser.
+2. While the transport is stopped, the UI uploads **one** program image
+   to each core that has at least one CUBE track, through WRITE, into the
+   build-owned arena. The second, third, and fourth track on that core
+   bind the same image. They do not upload it again.
+3. Each CUBE track gets its own state and its own 256-word cycle buffer
+   (below). That pointer is a source-machine field, not a `BASE` write to
+   X:`0x255`. Those eight entries are effect delay memory.
+4. The admission number is `modwerk_dsp_source_claim`, not the effect
+   allocator’s slot sum. A core with no CUBE track does not hold the
+   engine (`source_engine` off) and does not need the image.
+5. A pattern change, a Part change, and LOAD PROJECT must prepare that
+   set on the UI task before publication, the way the effect guards
+   already require. The sequencer callback still must not allocate, read
+   a file, wait, or transfer code.
+
+That program is a **source package** in the catalog: shared code, no
+effect-slot bits, admitted by the source claim. The allocator’s
+`resident` flag today means “zero arena words, code lives outside.” CUBE
+is the opposite shape (arena words, not an effect). Teaching the catalog
+that shape is a base change, reviewed with the machine-table room, not a
+private loader inside the module. Until it exists, the voice has nowhere
+legal to be uploaded.
+
+### Instances, memory, and cycles
+
+**Inferred** from section 4 and from the charge formula. These are not
+`cycle_count.py` results and not hardware figures. The sample loop plays
+one pre-mixed 256-word cycle; unison is a second phase on that buffer;
+morph is spread across blocks. Trilinear-per-sample does not fit and is
+not in this table.
+
+Shared versus per track:
+
+| What | How many | Where |
+|---|---|---|
+| Program image | One per core that has a CUBE track | Dynload P arena. Paid once, not per track |
+| Cube | One for the whole unit | ColdFire DRAM, 262,144 bytes. Not copied per track |
+| Playing cycle | One 256-word buffer per CUBE track | DSP data on that track’s core |
+| Phase, increment, FM, morph cursor | Per CUBE track | Same core. Section 4’s planning figure is about 16 words; a few dozen still does not move the cycle budget. The voice sets the real size |
+| Corner cycles (2,048 words) | Not kept per track | Stream from DRAM into the 256-word buffer between blocks. Four resident corner sets would be 8,192 words on the tight core for a morph that is not audio-rate |
+| Effect Y blocks | Untouched | X:`0x255` stays with FX1/FX2 |
+
+DSP data for the cycle buffers alone, plus the planning figure for state:
+
+| CUBE tracks on that core | Cycle words | State, planning figure | Program images |
+|---|---:|---:|---|
+| 1 | 256 | ~16 | One, on that core |
+| 2 | 512 | ~32 | One |
+| 4 | 1,024 | ~64 | One |
+| 8, four per core | 1,024 per core | ~64 per core | One per core |
+
+The cube is not in this sum. Eight tracks do not multiply DRAM by eight.
+
+Cycle price, modelled voice **54**, engine **0**, charge `(7 * 54 + 3) / 4 = 95`
+per voice. Effect slots stay at the 342 reserve (8 × 342 = 2,736). Remainder
+before any source voice: core 0 **384**, core 1 **829**.
+
+| Layout | Charged source | Against | Result |
+|---|---:|---|---|
+| 1 track, either core | 95 | 384 or 829 | Fits |
+| 2 tracks, same core | 190 | 384 or 829 | Fits. Two tracks on opposite cores are one voice each |
+| 4 tracks, panel 5–8 (core 0) | 380 | 384 | Fits, **four charged cycles** left. This is the whole tight remainder |
+| 4 tracks, panel 1–4 (core 1) | 380 | 829 | Fits, 449 charged cycles left |
+| 8 tracks, four per core | 380 per core | 384 and 829 | Fits only while core 0’s margin holds |
+
+A **55**-cycle model charges 97. Four of those are 388 and the fourth
+claim on core 0 returns `RUNTIME_CYCLES`. That track stays silent. Core 1
+still accepts it. The sample loop is aimed at 54 so the four-track case
+on tracks 5–8 is the one that fits, not the one that refuses.
+
+What else moves the remainder:
+
+- `source_engine` is added once per core, on top of the voices. Any
+  non-zero engine price spends the four-cycle margin on core 0. Keep it
+  at 0, or drop the per-voice target by the same charge.
+- An effect whose real cost is above 342 shrinks the remainder by the
+  difference (`slot_charge` takes the max of the slot and the reserve).
+  Four CUBE tracks on core 0 have no room for that. The same four on
+  core 1 have hundreds of charged cycles left, so a heavier effect
+  belongs on tracks 1–4 when both are in the pattern.
+- CUBE does not free an effect slot and does not consume one. A CUBE
+  track still has FX1 and FX2. Eight CUBE tracks still have sixteen
+  effect slots, each reserving at least 342 before the source sum.
+- Polyphony stays **one note per CUBE track**. Unison is the second
+  phase already inside the 54. A FLEX track is not an extra CUBE voice.
+  Chords stay with FM Synth and POLY8.
+- A refused claim does not steal cycles from a neighbour. The refused
+  track renders the silent source. The tracks that fit keep playing.
+
+Tracks 1–4 are the comfortable core. Tracks 5–8 are the qualification
+case: four voices at the target, stock reserves untouched, and almost
+nothing left. A layout that only fits on tracks 1–4 is not done.
+
+### Machine-table room
+
+**Documented.** Dynload cannot add the chooser row.
+
+`events.json` gives `ot_machines` `"room": 4`. `machine_registry.c` sets
+`ROWS` to 9 (five stock machines plus four contributions) and stops the
+reader at `n < ROWS - 5`. The experiment’s README says no new chooser is
+added. BIND never writes a machine label, a Part signature, or a page.
+A package that exists only in the DSP arena is not something the panel
+can select on one track.
+
+The chooser’s own immediates already follow the number of contributions
+(`counts` writes `5 + n` and `4 + n`). The cap that does not follow is
+`ROWS` and `room`. Raising one without the other either hides a record
+or advertises a row the reader will not load.
+
+Two ways to get a slot, and the way that is not available:
+
+1. **A free subscription in that image.** Room 4 is how many contributed
+   machines one image may include. It is not a reservation of POLY8,
+   Analog BD, VECTOR, and FM Synth by name. Stock FLEX, STATIC, THRU,
+   NEIGHBOR, and PICKUP are the five stock rows and do not use the four.
+   An image that leaves one of today’s four contributed machines out can
+   take CUBE in the free seat, beside every stock machine, with no room
+   change. An image that wants CUBE **and** all four current machines
+   cannot.
+2. **Raise the room in the base**, before the module exists. `events.json`
+   room, `ROWS`, and the loader’s table move together, in one
+   owner-reviewed change. That is shared-code work. It is not a CUBE
+   feature and it must not ship inside the module release. The module
+   then subscribes as row five (or whichever seat is free).
+
+Dynload does not sidestep either path. Overloading another machine’s
+signature, stuffing CUBE into an effect row, or keeping a second chooser
+inside the platform would put two owners on one selection. Do not.
+
+### The sequencer does not start
+
+**Reported** by Michael, 23 October 2026. Not reproduced in this study.
+Not an emulator result.
+
+On real hardware, any image that includes the dynload platform layer
+never starts the sequencer. Turing left out of the image does not change
+it. A 16-byte alignment fix of `dl_tx` / `dl_rx` does not change it. After
+PLAY there is no MIDI clock, no notes, and no trig-LED chase. Start and
+stop messages still go out. The emulator does not show the failure.
+
+The current tree matches the “already tried” half of that report and
+does not contain the fix. `transfer.c` declares
+`volatile uint16_t dl_tx[2][DL_WORDS]` and `dl_rx[2][32]` with `DL_WORDS`
+64, and no alignment attribute. Do not spend the next session realigning
+those arrays, and do not spend it linking or unlinking Turing. Both are
+already excluded as the cause.
+
+What the symptom bounds, **inferred**, not a diagnosis:
+
+- Start and stop still leave, so the ColdFire is running, the MIDI-out
+  path runs, and the transport task that sends those two messages runs.
+  This is not a dead CPU and not a dead MIDI port.
+- Clock, notes, and the trig LEDs are the step advance. Those do not run.
+  The bug is on the path from PLAY to the step clock, or on something
+  that step clock waits for (an audio frame, a DSP reply, a DMA
+  completion). It is not “MIDI output is broken.”
+
+The platform’s own notes already say the emulator is the wrong witness
+for this class of bug:
+
+- The transport README: the core-select repair “passed both-core
+  acknowledgements and continued frame execution in the emulator. No
+  hardware test occurred.” Passing that gate did not qualify hardware.
+- `UNCACHED` is `+0x08000000` on the ColdFire and the identity map in the
+  native test. The port has no caches. A bug in which eDMA and the core
+  disagree about the mailbox is invisible there. Alignment was tried;
+  cache policy was not. Those are different experiments.
+- The port’s DSP answers. `dl_frame`’s 64-frame timeout is about 23 ms of
+  audio frames on the unit and is a path the port does not take when the
+  model always acknowledges. A waiter that treats “reply pending” as
+  “do not advance” hangs only when the reply is late.
+- `PUBLICATION.md` already records one port blind spot: a queued Part
+  change does not rewrite the live effect arrays unless a track’s source
+  byte is 4. Gates that passed on that path were not testing the thing
+  they were named for. The same standard applies here. An emulator that
+  starts the sequencer does not contradict the hardware report.
+- `hooks.s` says this module owns the state-7 hook and cannot compose
+  with USB IN until a shared scheduler exists, and that the interrupt
+  must not busy-wait. If PLAY’s step clock depends on that DMA chain
+  completing the way stock completes it, the port can still count frames
+  while the unit never arms the clock. That is a hypothesis to test, not
+  a found cause.
+
+### Investigation plan
+
+Find the cause on the unit, with the emulator taught to show the same
+hang, before any CUBE word is uploaded. No image, dump, or `.syx` comes
+back into the repo. Counters stay on the machine or in a private log.
+
+**Control and first cut.** Build two images from the same base. One does
+not link the platform. One links it, with residency disabled, with no
+probe and no upload, without Turing, and without CUBE. On the unit, PLAY,
+and record four things separately: trig-LED chase, MIDI clock, MIDI
+notes, MIDI start/stop. Then STOP and PLAY again. Also note whether
+audio frames are still coming out of the converters. If the
+residency-off image fails, the bug is in the linked hook or its static
+data, not in an upload and not in a CUBE package. If it passes, the next
+cut turns residency on and sends a single PROBE with no STAGE and no
+WRITE.
+
+**What to read, each cut.** Names that already exist in the platform,
+plus the step clock the symptom is about:
+
+| Watch | What it distinguishes |
+|---|---|
+| `dl_frames`, and whether PLAY increases it | The frame interrupt is still entering. A frozen count means the audio ISR stopped |
+| `dl_errors`, `dl_accepted`, `dl_rejected`, `dl_modal_pending`, job state, pending sequence, `age` | A probe was sent, a reply was late (age reaching 64), or the mailbox was never idle |
+| Host core-select after the frame | The known “left on core 1” failure. If it sticks, both DSPs can stop even though start/stop MIDI still leaves |
+| eDMA channel 1 done, error, and byte count, on an idle frame and on a frame with a job | The hook returned is not the same as the descriptor completing. The idle path still saves and restores the byte count |
+| Whether PLAY or the frame path waits while `dl_frame` reports a reply pending | The publication notes forbid that wait on the sequencer. A violation here matches “messages go out, steps do not” |
+| DSP running versus halted, and whether the converters still move | A dead DSP or a stuck ESAI can hold the step clock while a separate MIDI task sends start and stop |
+| Step index against the trig LEDs | Confirms the missing chase is the sequencer, not only the LED driver |
+
+**Bisect the platform, not the experiments already done.** In order,
+stopping at the first image that fails the LED chase and the MIDI clock:
+
+1. Platform absent (control).
+2. State-7 hook linked, `dl_frame` forced idle (returns immediately, sends
+   nothing). This separates “the hook replaced stock’s DMA chain” from
+   “the mailbox protocol runs.”
+3. Real idle `dl_frame` (the counters move, no packet).
+4. Publication guards linked.
+5. Allocator and manager linked, residency still off.
+6. One PROBE at boot, still no code upload.
+
+If a parent of the alignment attempt is known, bisect commits from
+“platform absent” to “platform present” with that same oracle. Do not
+use emulator frame counts as the oracle. Do not repeat the alignment
+build, and do not repeat Turing-on against Turing-off.
+
+**What the emulator has to grow** before a green gate is evidence:
+
+- A DSP that does not acknowledge, so the 64-frame age-out actually runs,
+  and an assertion that the step clock still advances while a reply is
+  outstanding.
+- The host core selector left on core 1, and the same assertion.
+- The uncached alias as a different memory from the cached view of
+  `dl_tx` / `dl_rx`, so a packet written through one and read through the
+  other fails the gate.
+- eDMA completion, channel-1 error, and the byte-count restore as a step
+  after the hook returns, including the idle frame that arms nothing.
+
+Until those four fail in the port when forced, and pass when the hardware
+cause is fixed, an emulator PLAY is not a qualification of this layer.
+
+### Updated milestones
 
 Each milestone is shippable on its own. None of them is a firmware commit.
 Native assembly starts only when a milestone says so, on a machine that
 has the owner’s OS outside the repo, and it never checks in an image, a
-`.syx`, or a stock byte.
+`.syx`, or a stock byte. Step 0 is the gate. Later steps do not start
+around it. Step 2 is host-only and may run beside it.
 
 | Step | Delivers | Depends on | Done when |
 |---|---|---|---|
-| 0 | Base change: `ot_machines` room 5 (or more). Owner review. Not part of the module. | Nothing in CUBE | A fifth record is accepted by the loader and `modules:compat`, and the four current machines still appear in their order |
-| 1 | Original cube generator and a host reference oscillator (no DSP): axes, morph bits, 14 Hz mute, thru-zero FM, unison, tone masks | Step 0 can lag; this step does not touch the image | Vectors: known sine, known alias of a 256-point saw at C4, morph-off equals one frame, morph-on is the linear mix, FM sign flip |
-| 2 | DSP56300 voice in `dsp_host` only, one voice, resident-style source, both payload bases | Step 1 | `cycle_count.py` floor under the 55-modelled-cycle target for the sample loop; reference residual met; dirty-state init silent |
-| 3 | ColdFire machine record: chooser name CUBE, SRC and SETUP pages, Part signature, render control record, static P placement on both cores. Card remix. No dynload upload | Steps 0 and 2 | Emulator: select, play, p-lock X and PTCH, LFO to Y, SYNC TRIG, leave the machine and the track is FLEX again, neighbouring Flex still plays. Sequencer runs |
-| 4 | Price `source_voice` / `source_engine`. Four tracks on core 0 beside stock FX reserve | Step 3 | Admission refuses a layout that does not fit; the refused track is silent; a layout that fits plays |
-| 5 | User cube from the sample pool, transport stopped, fallback to the built-in cube | Step 3 | A wrong-sized buffer is rejected; a valid 256×512 buffer changes Z = 0 |
-| 6 | Hardware, owner or author, version-matched | Steps 3–4 | Heard on a named unit: one track, then four on tracks 5–8, p-locks, LFO, Part reload, power cycle. Sequencer does not stick. Chip timing recorded separately from the modelled floor |
+| 0 | The sequencer starts on hardware with the dynload platform linked. Residency off and Turing absent first; then one no-op probe. Cause written down. The emulator models the four gaps above | Nothing in CUBE | On a named unit: trig LEDs chase, MIDI clock and notes leave, start/stop still leave, audio frames continue. Forcing the cause in the port reproduces the hang; the fix removes it |
+| 1 | Base change, owner review, not the module: `ot_machines` room enough for CUBE beside the contributed machines that image should combine, and a source package in the dynload catalog that is not an effect id | Step 0 | The loader accepts the new record. Stock rows stay in order. The sixteen effect slots stay effects. CUBE’s program admits through the source claim |
+| 2 | Original cube generator and a host reference oscillator: axes, morph bits, 14 Hz mute, thru-zero FM, unison, tone masks | None | Vectors: known sine, known alias of a 256-point saw at C4, morph-off equals one frame, morph-on is the linear mix, FM sign flip |
+| 3 | DSP56300 voice in `dsp_host` only, one voice, both payload bases. Sample loop at or under 54 modelled cycles, engine price 0 | Step 2 | `cycle_count.py` floor meets that target. Four charged voices are 380 or less. Reference residual met. Dirty-state init silent |
+| 4 | Per-track loading: one shared program image per core, per-track state and 256-word cycle, `source_voice` / `source_engine` claim. Upload only while stopped | Steps 0, 1, and 3 | CUBE on track 1, FLEX on track 2, tried on both cores. Leaving CUBE returns the track to FLEX. A neighbour stock machine keeps its source and both effect slots. The sequencer runs. A refused track is silent |
+| 5 | The instance matrix: 1, 2, 4 on tracks 5–8, 4 on tracks 1–4, and 8 | Step 4 | Admission matches the table in this section. Core 0’s four-cycle margin holds, or the extra track is silent. A stock effect on a CUBE track is still selectable. No effect slot was consumed by the voice |
+| 6 | User cube from the sample pool, transport stopped, fallback to the built-in cube | Step 4 | A wrong-sized buffer is rejected. A valid 256×512 buffer changes Z = 0 |
+| 7 | Hardware, owner or author, version-matched, of the voice rather than of the empty platform | Steps 4 and 5 | Heard on a named unit: one track, four on tracks 5–8, four on tracks 1–4, eight, p-locks, LFO, Part reload, power cycle. Sequencer does not stick. Chip timing recorded separately from the modelled floor |
 
-Steps 5 and the waveshaper (external-input MODE) wait. SYNC HARD waits
-until TRIG is already right, because the hardware sync law is uncertain
-and the buggy mute behaviour must not be copied.
+SYNC HARD and the external-input waveshaper wait until step 4’s TRIG path
+is already right. The hardware sync law is uncertain, and the buggy mute
+behaviour must not be copied.
 
-### Risks
+## 6. Risks
 
 | Risk | Why it is real | What to do |
 |---|---|---|
-| `ot_machines` is full | Room 4, four modules subscribed | Step 0 before any module PR. Do not poke the chooser length the way early Analog BD did; the base owns those sites |
-| Dynload and the sequencer | The requester reports a hardware break. The tree still marks the loader experimental and unmeasured on several sequencer paths | Resident voice only. No pattern-time code upload |
-| Tight core | 384 cycles left on tracks 5–8 after eight stock FX reserves; 7/4 charge | Sample loop stays on one pre-mixed cycle. Morph is spread. If the count misses, drop unison before dropping linear interpolation |
-| Estimates are not counts | Section 4’s cycle numbers are inferred floors | Step 2 replaces them. Contention and the MKII’s 1.42–1.74× factor remain until step 6 |
+| Sequencer never starts | Michael reports that any image with the dynload platform fails this way on hardware, including Turing left out and including the mailbox alignment attempt. The emulator does not show it. The transport README already says the core-select repair had no hardware test | Step 0 before any CUBE upload. Instrument the idle hook, not a new voice. Teach the port the four gaps in section 5. Do not realign `dl_tx` / `dl_rx` and do not toggle Turing as the next experiment |
+| `ot_machines` is full | Room 4, and four modules already subscribe. Dynload adds no chooser row | An image that omits one current contributed machine can take the free seat beside stock. An image that wants all four as well needs step 1, in the base, before the module. Do not poke the chooser length from the module, and do not hide CUBE in an effect id |
+| Tight core | 384 cycles left on tracks 5–8 after eight stock FX reserves. Four voices at 54 modelled cycles leave four charged cycles | Sample loop stays on one pre-mixed cycle. Engine price stays 0. Morph is spread. If the count misses, drop unison before dropping linear interpolation, and let the extra track go silent |
+| Effect cost above the reserve | `slot_charge` takes the max of the slot and 342, and that sum is added before the source voices | Four CUBE tracks on core 0 assume every slot is at the reserve. A heavier effect on tracks 5–8 spends the margin. Tracks 1–4 have the headroom |
+| Estimates are not counts | Section 4’s cycle numbers are inferred floors | Step 3 replaces them. Contention and the MKII’s 1.42–1.74× factor remain until step 7 |
 | Chromatic takes are first-wins | Quantizer and FM Synth already subscribe. A claims function that accepts every track would steal theirs, or theirs would steal CUBE | Claims only CUBE tracks, order 10–29. Test PTCH bytes with Scale Quantizer installed |
 | Descriptor formatter | A cloned page draws the donor’s law | Write the formatter. Semitone PTCH, enumerated OCT/TONE/MORPH/SYNC |
 | Stored bytes | A value outside the count stalls the sequencer | Counts fixed above. `stamp-defaults` before play on old projects. Append-only enums |
-| Payload A versus B | Absolute table addresses differ | Build-supplied bases. Render both cores in step 2 |
-| Shared X/Y and P | Datasheet RAM is not free. Analog BD already occupies a donor region and removes SPRING from its remix | Measure a hole. Do not reuse Analog BD’s addresses. Do not require SPRING to be absent unless the measurement says that is the only hole, and then declare that conflict |
-| Cube size versus the 256 KiB DSP staging limit | Unpacked 24-bit cube does not fit | DRAM plus a 256-word working set |
+| Payload A versus B | Absolute table addresses differ | Build-supplied bases. Render both cores in step 3 |
+| Data RAM versus the arena | Datasheet RAM is not free. The program can live in the dynload arena; the per-track cycles cannot | Measure a hole for the 256-word buffers. Do not reuse Analog BD’s addresses. Do not take an X:`0x255` entry. Do not require SPRING to be absent unless that measurement says so, and then declare the conflict |
+| Cube size versus the 256 KiB DSP staging limit | Unpacked 24-bit cube does not fit | DRAM plus a 256-word working set per CUBE track |
 | Factory content | Named banks are other people’s work. The product name is a trademark | Original cycles only. Chooser label CUBE, not Piston Honda |
 | Alias pitch will not match the hardware | Module sample rate is unpublished; the Octatrack is 44.1 kHz | State it in the module README. Do not oversample to chase it |
 | Tone and sync laws | Unnamed tone modes; sync firmware reports disagree | Orthodox plus two original masks. SYNC TRIG first. Do not implement the mute bug |
 | Dual independent positions | The hardware stores a separate X/Y/Z per oscillator. Six SRC knobs cannot hold both and still keep PTCH | v1 shares one position. B is unison and the FM source. A second position is a later page, not a silent reuse of these bytes |
-| USB lifecycle | New Octatrack modules are expected to Try/Keep/Undo | ColdFire record can use that path. DSP bytes stay resident so Keep does not dynload a voice under a running sequencer |
-| Fidelity without a unit | No listening was done for this note | Step 1’s vectors are the contract. A hardware A/B against a Mk3 is optional and must not add factory samples to the repo |
+| USB lifecycle | New Octatrack modules are expected to Try/Keep/Undo | The ColdFire record can use that path. Keep must not be the first moment program words move. Upload only while the transport is stopped, and only after step 0 |
+| Fidelity without a unit | No listening was done for this note | Step 2’s vectors are the contract. A hardware A/B against a Mk3 is optional and must not add factory samples to the repo |
 
 ## Recommended layout
 
@@ -764,7 +1140,10 @@ Chooser name **CUBE**. One note per track. Stock AMP is the envelope.
 PTCH is the chromatic and MIDI note (0 semitones ≈ C4). X/Y/Z scan an
 8×8×8 cube of original 256-sample, 16-bit cycles, linear between
 neighbours unless MORPH turns that axis off. FM is thru-zero from the
-unison oscillator. The cube stays in ColdFire DRAM. The DSP plays one
-pre-mixed cycle per track, resident on both cores, and does not use
-dynload. Four such tracks are the goal on the tighter core; a track that
-does not fit is silent.
+unison oscillator. The cube stays in ColdFire DRAM, one copy for every
+track. The DSP plays one pre-mixed cycle per CUBE track from one shared
+program image per core, uploaded through dynload while the transport is
+stopped. Tracks that are not CUBE keep their stock machines and their
+effect slots. Four CUBE tracks are the goal on the tighter core (tracks
+5–8); a track that does not fit is silent. Nothing is uploaded until an
+image that merely contains the platform starts the sequencer on hardware.
