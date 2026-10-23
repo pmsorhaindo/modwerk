@@ -3,8 +3,9 @@
 **Date:** 23 October 2026
 **Status:** Research only. No module, no firmware, no image.
 **Instrument:** Octatrack, stock OS 1.40C as this repository builds it.
+**Revision:** later the same day, a second question: finer control of the stock knobs, in [Finer control of the stock envelopes](#finer-control-of-the-stock-envelopes).
 
-This note says what the stock amplitude and filter envelopes actually are, which extensions are already covered by modules in this tree, and which build is worth doing. It does not add Elektron firmware or a new effect.
+This note says what the stock amplitude and filter envelopes actually are, which extensions are already covered by modules in this tree, and which build is worth doing. It does not add Elektron firmware or a new effect. The second half stays on the stock envelopes and only changes how their existing knobs are read.
 
 ## What the stock instrument does
 
@@ -218,4 +219,78 @@ M1's README has to say, in one place, which edges it follows and which it does n
 | 5 | Replace the stock multi-mode filter | Sustain on the familiar BASE/WIDTH filter | Removes the stock effect from both slots. Not worth it. |
 | 6 | No module: LFO ONE, the designer, HOLD infinite | One-shot shapes and a full-level keyboard hold | Already shipped with the instrument. Use it when the request is a shape rather than a sustain level. |
 
-**Build rank 1.** Spend M0 on the note edge before writing DSP. If that edge is not free of FM Synth, ship rank 2 under the same twelve knobs and do not call it a keyboard envelope. Leave the stock amplitude page and the stock multi-mode filter where they are.
+**Build rank 1** of that list only if the goal is a new shape. Spend M0 on the note edge before writing DSP. If that edge is not free of FM Synth, ship rank 2 under the same twelve knobs and do not call it a keyboard envelope. Leave the stock amplitude page and the stock multi-mode filter where they are.
+
+## Finer control of the stock envelopes
+
+This section answers a different request: keep AMP ATK, HOLD and REL, and the multi-mode filter's own attack and decay, and make those knobs finer. No new envelope stage, no new effect id.
+
+### How a knob becomes a time
+
+Every one of these parameters is a byte, 0–127, on the panel, in the Part, and in a parameter lock. The bank file stores one byte per lockable parameter per step, `0xff` meaning no lock. AMP attack, hold and release are lock slots 12–14. An effect's six main-page knobs are slots 18–23 (FX1) and 24–29 (FX2). A bipolar value is stored as the panel value plus 64. That layout is measured in `sdk/octabam/tools/hw/ot_bank.py`. The filter's setup knobs, including which parameter its envelope moves, are not in those 32 bytes. E-Verb's notes say the same thing for every stock effect: locks, LFOs, scenes and MIDI CC reach the six main-page knobs only.
+
+The live DSP record is wider than the byte. FM Synth writes AMP attack, hold and release as halfwords, `value << 8`, so the knob sits in the high byte and the low byte is zero (`sdk/octabam/modules/synth/upstream/synth/README.md`, the DSP-facing override). On the playback page the same packing is used, and that write-up says the low byte is what lets an LFO or a scene land between two knob values. Scene morph and the LFO stage are the last writers of the voice record before it is shipped to the DSP. So the stock machine already has an 8-bit fraction under the 7-bit knob. What is not measured is whether the amplitude envelope and the filter envelope *consume* that fraction or take only the high byte. A crossfader parked between two scenes one step apart, on attack and on the filter's decay, is the test. Until it is done, a finer value written into the low byte is a guess.
+
+The ColdFire side publishes the byte. The sample-by-sample ramp is the DSP's. For a synth track, FM Synth took that ramp over and left the DSP envelope open; its tables (`po_atk`, `po_relk`, `po_hold128`) were generated to match a stock FLEX measurement, and they are not a copy of the DSP's table. The DSP's own representation, a table or an instruction sequence, is not in this repository and does not belong in it. The filter's attack and decay are inside the multi-mode filter effect. No time for them is recorded here. ColdFire only delivers the six main-page bytes.
+
+### The step size, from the published amplitude laws
+
+Attack and release, as the synth engine states the DSP's law, share an exponent. Each step is about 8.5% longer than the one below it (`2^(1/8.53)`). The absolute gap therefore grows with the knob. These are that formula and the points the write-up states, not a new listening test. The formula at the stated points lands within a few percent (attack 8 is 7.4 ms against the stated 7.5; attack 64 is 698 ms against 700; attack 96 is 9.4 s against 9.45).
+
+| Knob | Bottom | Middle | Top, before the special value |
+| --- | --- | --- | --- |
+| ATK | 0 is 3.85 ms, and the next step is about 0.3 ms. Value 8 is the stated 7.5 ms. | 32 is 50 ms, a step of about 4 ms. 64 is 700 ms, a step of about 60 ms. | 96 is 9.45 s, a step of about 0.8 s. Value 127 does not follow the formula: the ramp stops about 21.5 dB down. |
+| REL | The formula at 0 is 0.3 ms, but the DSP's 0 is a one-sample cut. 40 is 7.6 ms, a step under 1 ms. | 60 is 38.5 ms. 80 is 196 ms, a step of about 17 ms. | 100 is 994 ms. 126 is 9 s. 127 is infinite, not a longer tau. |
+
+Hold has no published per-step law. At 120 BPM the stated points are 32 → 282 ms, 64 → 1132 ms, 100 → 5.5 s, and 127 → infinite. From 32 to 64 the time grows about fourfold, so the milliseconds per click are increasing. The manual calls the hold a count of sequencer steps when SYNC is on. These points are not an integer number of sixteenths at 120 BPM (one sixteenth is 125 ms), and this note does not invent the conversion. SYNC off is unmeasured.
+
+The synth engine's own playback does not follow the attack formula to the top. Its gain step is a Q15 integer, and from attack 91 upward that step is stuck at 1, which is an 11.9 s ramp. That collapse is the engine, not a stock-DSP measurement. Release 0–15 in the engine is floored near a 1 ms tau, where the DSP's 0 is a cut.
+
+The filter envelope has 128 steps and no published time. Do not reuse the amplitude table for it.
+
+### Where a change would sit
+
+A finer reading that the stock DSP already understands is a ColdFire change: the knob handler, the formatter that draws the box, or the halfword published after scenes and LFOs. It does not upload DSP code.
+
+The DSP loader is the wrong tool here. Its early hardware runs stopped the frame engine, and when frames stop the sequencer sticks on the first step (`docs/OCTATRACK_HARDWARE_TRAPS.md`, "DSP loader"). Later aligned builds kept frames running through an upload, but the loader is still the path that has wedged the cores. Anything in this section publishes a value the stock envelope already reads. Replacing the filter's coefficient routine would be the loader, or a static patch of that effect, and both are out of scope.
+
+FM Synth already writes the three amplitude halfwords on a synth track. A second writer on those words fights it. Sample tracks are the place a publish-side remap is free. The AMP SETUP detours and the spare sixth box are taken by LEG in that fork; a range byte does not go there.
+
+### The options
+
+**1. A range switch, stock law by default.** One new saved value per track, defaulting to the law above, so an old Part sounds the same. A second value, short, publishes a remapped index: the musician's 0–126 covers a narrow band of the stock curve, and 127 stays the stock special (infinite hold and release, the anomalous attack). The DSP still sees a 7-bit index, or a 7-bit index plus a fraction if the low-byte test passes. Musical value is at the long end, where one click is already a large fraction of a second; the short band spends the 128 steps there. UI is one word on a setup or project row, not a gesture on the knob. FUNC+turn on a 0–127 knob already jumps to an end (the synth write-up; some effect knobs also stop at the centre). The encoder push, on pitch, makes the step coarser, not finer. Neither gesture is the range switch. Cost is a byte and a remap when the frame publishes, ColdFire only. Risk is a byte that stock already uses, and a short law that surprises someone who copies a Part onto a build without the module (the byte must read as stock when the module is absent). No loader.
+
+**2. The low byte, once it is shown to count.** The halfword has 256 fractions under each knob step. Writing them is the actual increase in resolution, and it needs no new time table. UI: turn while the encoder is held, only if that hold is free on these knobs. It is not free on pitch. The box prints the time, not the raw word. A five-character string already fills an FM Synth box (`774ms` in that write-up), so the formats that fit are `7.6ms`, `700ms`, `1.1s`, `9.4s`, `INF`. Cost is the formatter plus a few instructions in the knob handler. Risk: if the DSP ignores the low byte, the gesture does nothing audible. P-locks and the Part byte stay 7-bit, so a lock or a reload snaps back to the click. Live playing and a scene crossfade would be the fine path; the sequence would not keep it. No loader.
+
+**3. Print the time on the stock clicks.** The formatters for attack, hold and release draw milliseconds from the law above, including infinite and the anomalous attack. The filter's attack and decay stay numeric until their law is measured. This does not add resolution. It makes the 8.5% spacing visible, which is what tells a musician that the top of the knob is the coarse end. Same five-character budget. ColdFire, UI thread, no publish change, no save change, no loader. It is the display half of option 2 and worth shipping with option 1 even if the low byte is dead.
+
+**4. Tempo-synced attack and release.** SYNC already exists. The manual says it chooses whether the amplitude envelope follows tempo. The published attack and release formulas have no tempo term, and the hold points are given at one tempo, so it is unmeasured whether SYNC already scales attack and release or only the hold. The first job is that measurement. If attack and release are absolute, a second SYNC behaviour can publish a step count from the stock tempo and the track speed, the way hold is described, instead of a millisecond. That is a coarser grid on purpose, useful when a decay should be a sixteenth, and it is not finer. The filter has no SYNC of its own; its setup can couple its envelope to AMP HOLD. ColdFire publish, instrument tempo, no private clock, no loader. Risk is overriding a SYNC that already does this.
+
+**5. A curve per segment.** AMP SETUP's ATCK is already LIN or LOG, for the attack only. Release is exponential in the measurement. The filter has no curve control. Offering LIN release, or a curve on the filter, changes the shape the DSP was built to run. If that shape is hard-wired, the only implementation is to own the ramp, which is the new envelope the previous section ranked, not a finer knob. Leave it. The existing ATCK control is the curve the instrument already gives.
+
+**6. High-resolution MIDI.** Audio CC in and out are 7-bit. Attack, hold and release are CC 22, 23 and 24 on the track's trig channel (manual appendix C.7). With the multi-mode filter in a slot, its main page is listed BASE, WIDTH, Q, DEPTH, ATK, DEC, so attack and decay are FX parameter 5 and 6: CC 38 and 39 in FX1, CC 44 and 45 in FX2. CC Map's handler is also 7-bit, and only for effect setup. Standard 14-bit pairing uses CC 32–63 as the LSB of CC 0–31, and that range is already the other audio parameters (CC 54 is All Arm, CC 48 is the crossfader). NRPN select is CC 98 and 99, which CC Map's notes say tail-call stock rather than being taken as audio parameters. An NRPN can carry a fine value without colliding with CC 22–24, and it is worth a ColdFire MIDI hook only after option 2 exists. Until the destination has more than 128 steps, NRPN and 14-bit CC add nothing a 7-bit CC does not. No loader. Risk is consuming NRPN that stock or another module already uses; the hook has to tail-call when the NRPN is not one of these parameters.
+
+**7. Finer parameter locks.** This is the one musicians would feel in a sequence, and it does not fit the file. A step has 32 lock bytes and no spare for a fraction (slots 30 and 31 are present and undecoded; they are not a place to hide a fine value). A sidecar table in the project, on the quantizer's pattern of comment lines the stock loader skips, would survive a save and would be dropped by trig copy, paste, and a stock load that never sees it. Default remains the 7-bit lock, so old patterns are unchanged. Do not do this in the first version. A range switch (option 1) makes the existing lock byte finer in time without a new lock format, which is the compatible version of the same wish.
+
+### Minimal first slice
+
+ColdFire only. No DSP upload, no new effect, no new envelope stage, no change to a project that leaves the new value at its default.
+
+1. On the emulator, park a scene crossfade between two attack values one apart, and do the same for the filter's decay. Record whether the time moves inside the step. That decides option 2. It writes no firmware into the repository.
+2. Ship option 3 for the amplitude knobs, and option 1 with two words, STOCK and SHORT, default STOCK. SHORT remaps 0–126 into the band where the stock steps are coarsest (around the stated 700 ms to 9 s region) and leaves 127 alone. The published value is still a stock index. Filter attack and decay wait on their own measurement; the same switch can cover them once that law exists.
+3. Option 2 joins the slice only if step 1 says the low byte is audible, and only as a live gesture, with the time printed in the box. Locks stay 7-bit.
+4. Leave NRPN, lock sidecars, release curves and the DSP loader out.
+
+## Ranked summary, finer stock knobs
+
+| Rank | Approach | Musical value | UI | Where | Cost | Risk | Loader |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | Range switch, default the stock law | The 128 steps cover the long, coarse end instead of 4 ms through minutes | One word, STOCK or SHORT | ColdFire publish of the existing byte | A remap per frame on tracks that leave STOCK | A saved byte stock already uses; a build without the module must still read as stock | No |
+| 2 | Low byte under the knob, after the scene test | Real steps inside one click, if the DSP reads the fraction | Push-turn only if that hold is free; the box shows the time | Knob handler and the halfword | Small, UI plus one word | Silent if the DSP ignores the fraction; locks and reloads snap to the byte | No |
+| 3 | Print milliseconds on the stock clicks | None added; the coarse top becomes visible | Five characters: `700ms`, `9.4s`, `INF` | The slot formatter | UI thread only | A string that touches the box edge | No |
+| 4 | Tempo-synced attack and release, after measuring SYNC | Decays land on sixteenths. Not a finer millisecond | The existing SYNC word, or one added behaviour | ColdFire, from the stock tempo | Small | May duplicate a SYNC that already scales these | No |
+| 5 | NRPN into the low byte | External control of rank 2 | None on the panel | MIDI in, then the same halfword | A dispatch hook that tail-calls | Useless until rank 2 is real; must not swallow stock NRPN | No |
+| 6 | A finer lock byte | The sequence keeps the fine value | None, if the sidecar is invisible | Project file, outside the 32 lock bytes | A second store, and every trig copy | Copy, paste and a stock load drop it | No |
+| 7 | A new curve on release or on the filter | A different shape, which is the previous section's problem | A setup word | Owning the ramp | A new envelope | Out of this request | No |
+
+**First slice:** the scene test, then the time formatter and the STOCK/SHORT switch. The low byte is in that slice only if the test hears it. NRPN and finer locks wait. The DSP loader stays out.
