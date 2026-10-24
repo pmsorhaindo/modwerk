@@ -1,6 +1,7 @@
 # Cube oscillator: a Piston Honda Mk3-style machine for the Octatrack
 
-Status: design only, 23 October 2026, with a dynload addendum the same day.
+Status: design only, 23 October 2026. Dynload addendum the same day. OSC B
+page added 24 October 2026.
 No firmware, no DSP image, and no module is added here. This note is the
 behaviour target and the fitting plan for a new Octatrack **track machine**
 in this fork (`pmsorhaindo/modwerk`).
@@ -490,37 +491,175 @@ are not the default LFO targets, because the six SRC slots already are.
 |---|---|---:|---|---|
 | A | FINE | 128 | 64 = 0 cents | −64…+63 cents on the PTCH note. |
 | B | OCT | 5 | 2 = 0 | −2, −1, 0, +1, +2 octaves, applied before the low-note mute. Matches the manual’s ±2 octave shift. |
-| C | UNI | 128 | 0 = off | 0 off. 1–96 detune B upward from A, a small fixed curve (a few cents at the bottom, about 50 cents at 96). 97–111 = B one octave down. 112–127 = B one octave up. B uses A’s morphed cycle. |
+| C | UNI | 128 | 0 = off | 0 off. 1–96 detune B upward from A, a small fixed curve (a few cents at the bottom, about 50 cents at 96). 97–111 = B one octave down. 112–127 = B one octave up. This is the fine layer on top of OSC B’s B PTCH. It is not what turns B’s own cube position on. |
 | D | TONE | 3 | 0 | 0 Orthodox: 16-bit table, no extra quantize. 1: output masked to 12 bits. 2: output masked to 8 bits. Original stand-ins, not the unnamed factory tones. |
 | E | MORPH | 8 | 7 = XYZ | Bits for which axes crossfade. 0 hard (nearest frame only). 1 X, 2 Y, 4 Z, and the combinations. 7 is full trilinear. Changing this count later stalls old projects; append only. |
 | F | SYNC | 3 | 1 = TRIG | 0 free-run. 1 reset A and B phase on the stock trig, at the trig’s sub-block offset. 2 hard: B’s wrap resets A’s phase (the modular jack, approximate). |
 
-MODE (oscillator versus waveshaper) is **not** on this page in the first
-version. It needs a defined track input and a gain law, and it changes
-what PTCH means (the manual turns the tune knob into gain). Adding it
-later is a new SETUP value or a new slot, with a migration note, not a
-reuse of SYNC.
+MODE (oscillator versus waveshaper) is **not** on this page, and it is
+not the FM-law knob on OSC B. It needs a defined track input and a gain
+law, and it changes what PTCH means (the manual turns the tune knob into
+gain). Adding it later is a new value appended to LAW, or a new slot,
+with a migration note. It is not a reuse of SYNC, and a p-lock must not
+be able to turn the track into a waveshaper for one step.
 
 BANK, if a second original cube is ever added, is a new SETUP value
 appended after SYNC. It is not a reuse of Z. Z always moves inside the
 cube that is loaded.
 
+### The SRC ring (SRC, SETUP, OSC B)
+
+On a CUBE track the SRC key walks three pages:
+
+```
+SRC  --double tap-->  SETUP  --double tap-->  OSC B  --double tap-->  SRC
+```
+
+A single press of SRC always shows the SRC page, from either of the other
+two. FUNC+SRC always opens SETUP, from any of the three, and does not
+walk the ring. The double tap is the stock page-key double tap, not a
+second timer and not the TRACK key.
+
+**Documented stock, and where it clashes.**
+
+- Double-tap of a page key opens that page’s SETUP. FM Synth’s notes call
+  the SRC case “double-tap PLAYBACK” and name the opener. The same notes
+  cite the manual for AMP: FUNC+AMP or a double press of AMP opens AMP
+  SETUP. VECTOR’s page 2 is SRC SETUP, opened by a double tap of SRC, and
+  a single SRC press returns. POLY8 opens SRC SETUP with a double-click
+  of SRC or with FUNC+SRC. `docs/OCTATRACK_DRIVING.md` uses FUNC+SRC for
+  the same screen.
+- The TRACK key is a different control. Its double tap opens the sample
+  list or the machine list. Playmodes records the track keys and the five
+  page keys as different handlers. Analog BD already refuses the track
+  double tap for a synthesized source so it does not open Flex’s pool.
+  CUBE does the same. The ring does not bind that key.
+- The panel tools treat a track double tap the OS accepts as 50 ms down,
+  150 ms up, 50 ms down (`docs/MODULE_UI_CAPTURES.md`, the `ot_emu`
+  oracle). A 150 ms press is a single press. The SRC key’s own window was
+  not measured separately. CUBE does not invent one. It uses whatever
+  detector already decides that the PLAYBACK double tap opens SETUP.
+
+From the SRC page, one double tap still opens SETUP. That is the stock
+result, so the usual gesture does not change. The clash is the next
+double tap, and only on a CUBE track: stock has no third SRC page, and
+this study did not measure what a Flex track does if you double-tap SRC
+again while SETUP is already open. VECTOR only documents the single press
+as the way back. On CUBE that second double tap is defined. It opens OSC
+B. A third double tap returns to SRC, which is also where a single press
+goes. A musician who double-taps from OSC B expecting SETUP lands on SRC
+instead.
+
+**Fallback.**
+
+- FUNC+SRC opens SETUP from SRC, from SETUP, and from OSC B. SETUP is
+  never only reachable by walking the ring.
+- A single SRC press leaves OSC B and leaves SETUP.
+- The ring runs only when the current track is CUBE. Every other machine,
+  MIDI mode, and the master track keep the stock double tap. Switching
+  from a CUBE track to a stock track leaves OSC B; that track has no such
+  page.
+- A held trig or a held scene does not advance the ring. Lock and scene
+  edits stay on the page that is open. A double tap during a hold falls
+  through to the stock page-key handler.
+- The gesture is not a project-wide `key:SRC` claim. That claim has no
+  “only my tracks” scope (`docs/module-guides/README.md`), so naming it
+  would clash with every other module that names SRC. The machine record
+  owns the tap the way it owns its page: the handler replays stock unless
+  this track is CUBE, and `uiClaims` stays empty. If that per-track wrap
+  cannot be done without a global detour on the page-key handler, stop.
+  Do not add a private timer. Double tap keeps the stock meaning (open
+  SETUP only), FUNC+SRC still opens SETUP, and OSC B waits until the
+  page key can be taken per track.
+
+### OSC B
+
+Panel labels are four characters: BX, BY, BZ, LINK, LAW, BPCH. The six
+values are Part bytes, one set per track, saved with the Part the way
+SETUP is. Defaults below are the raw byte a fresh Part stores.
+
+| Encoder | Label | Count | Default | Law |
+|---|---|---:|---|---|
+| A | BX | 128 | 0 | B’s X. Same law as SRC X. Ignored while LINK keeps B on A’s position. |
+| B | BY | 128 | 0 | B’s Y. Same law as SRC Y. Same ignore. |
+| C | BZ | 128 | 0 | B’s Z. Same law as SRC Z. Same ignore. |
+| D | LINK | 4 | 0 = BOTH | See the table under this one. Count is fixed. New values are appended. |
+| E | LAW | 3 | 0 = LIN | The FM law for the SRC FM knob. Not the waveshaper. |
+| F | BPCH | 128 | 64 = 0 | Signed semitones, −64…+63, same encoding as PTCH. 0 is unison with A before UNI. |
+
+LINK is one knob with four values, because position and pitch are
+different follows and a single on/off would tie them together. BOTH is
+the previous v1 behaviour and the default.
+
+| LINK | B’s cube position | B’s pitch |
+|---|---|---|
+| 0 BOTH | Follows A’s X/Y/Z. BX/BY/BZ are stored and not read. One shared cycle. | A’s note, plus BPCH, plus UNI. |
+| 1 POS | BX/BY/BZ, own cycle, own morph. | A’s note, plus BPCH, plus UNI. |
+| 2 PITCH | Follows A, one shared cycle. | Drone. A’s note is not added. |
+| 3 OFF | Own cycle. | Drone. |
+
+A’s note is PTCH plus FINE plus OCT, including a chromatic key and a MIDI
+note. UNI still applies in every row: cents for 1–96, an extra octave down
+for 97–111, an extra octave up for 112–127. UNI at 0 does not clear BPCH.
+Unison is BPCH 0 and UNI 0.
+
+A drone means fixed pitch, not a second voice and not a sound that ignores
+AMP. B’s frequency does not use A’s PTCH, FINE, OCT, chromatic key, or
+MIDI note. With BPCH at 0 and UNI at 0 that pitch is the same C4 the
+chromatic key already calls about 261.6 Hz. SYNC still resets B’s phase
+with A’s. The track’s AMP envelope still gates the mix. A closed amp is
+silence, drone or not.
+
+LAW, and why it is not the waveshaper:
+
+| LAW | Behaviour |
+|---|---|
+| 0 LIN | Thru-zero linear FM. A scaled B sample is added to A’s phase increment and may change its sign. Depth is the SRC FM knob. This is the v1 law. |
+| 1 EXP | Thru-zero exponential FM. B scales A’s increment instead of being added. Same depth knob, same two oscillators. A few arithmetic ops, not a second morph. |
+| 2 OFF | SRC FM is ignored. B can be a drone or a second cycle without modulating A. |
+
+The waveshaper stays off this knob. Shipping it as a LAW value would let
+one p-lock change what PTCH means. When an input and a gain law exist, it
+is appended as value 3, not inserted, and not stored by reusing OFF.
+
+**Locks.** All six are p-lock targets and scene targets for the continuous
+ones (BX, BY, BZ, BPCH). LINK and LAW are enums: they lock as steps, and
+scenes do not crossfade them. They are not LFO destinations. BX, BY, BZ,
+and BPCH are. CUBE still does not replace LFO 3.
+
+They do not reuse playback slots 0–5. A BX lock that shared slot 1 would
+replace the X lock on that step. The stock step record is 32 bytes: slots
+0–29 are the five pages (playback, LFO, AMP, FX1, FX2), slot 30 is the
+spare POLY8 stores a chord shape in, and slot 31 is the sample slot (FM
+Synth’s measured layout, POLY8’s README). OSC B does not take slot 30.
+The six lock bytes have to be a measured hole in the pattern track
+record, or a base extension of that record in the same review as the
+`ot_machines` room. Until a held trig on OSC B locks BX and the SRC X lock
+on that step is unchanged, and the next step returns to the Part value,
+the page is not done. Part save alone is not that test.
+
 ### Pitch, trigs, MIDI
 
 ```
-Hz = 261.6256 * 2^((ptch + fine/100) / 12) * 2^oct
+A Hz = 261.6256 * 2^((ptch + fine/100) / 12) * 2^oct
+B Hz = 261.6256 * 2^((note + bpch) / 12) * 2^uniOct * detune(uni)
 ```
 
-`ptch` and `fine` are the signed offsets (raw byte minus 64), not the raw
-bytes. `oct` is the signed octave, −2…+2 (raw OCT minus 2). Mute the voice
-when `Hz < 14`, matching the manual’s floor. Do not emulate the rear
-trimmers.
+`ptch`, `fine`, and `bpch` are the signed offsets (raw byte minus 64), not
+the raw bytes. `oct` is the signed octave, −2…+2 (raw OCT minus 2).
+`note` is `ptch + fine/100 + 12*oct` when LINK is BOTH or POS, and 0 when
+LINK is PITCH or OFF (the drone). `uniOct` is −1, 0, or +1 from UNI’s
+octave band. `detune(uni)` is 1 when UNI is 0 or an octave band, and the
+small upward curve when UNI is 1–96. Mute A when `A Hz < 14`. Mute B when
+`B Hz < 14`. Do not emulate the rear trimmers.
 
 The phase increment is `Hz / 44100` cycles per sample, in a 24-bit (or
-wider) accumulator. Thru-zero FM adds a scaled B sample into that
-increment and may change its sign. LINK’s special case (B ignores A’s FM)
-falls out of computing B’s increment from the pre-FM frequency plus UNI,
-never from A’s modulated increment.
+wider) accumulator. LAW LIN adds a scaled B sample into A’s increment and
+may change its sign. LAW EXP multiplies that increment by a function of
+the B sample and may change its sign. LAW OFF does neither. B’s increment
+is always computed from B Hz, never from A’s modulated increment, so A’s
+FM does not move B. That is the Mk3 LINK rule, and it holds for every
+LINK value.
 
 Chromatic keys and MIDI note-on, for a CUBE track only:
 
@@ -584,8 +723,9 @@ it is owned (BusVerb, `AGENTS.md`). Do not place the cube there.
 | Data | Home | Size |
 |---|---|---|
 | Cube, 16-bit PCM | ColdFire DRAM, one copy | 262,144 bytes |
-| Current cycle for the track | DSP X or Y, per CUBE track, on that track’s core | 256 words. Four tracks on one core: 1,024 words |
-| Voice state (phase, FM, morph cursor, trig) | same region, per CUBE track | about 16 words. Four tracks: about 64 |
+| A’s cycle, and B’s when LINK shares it | DSP X or Y, per CUBE track | 256 words. Four tracks on one core: 1,024 |
+| B’s cycle when LINK is POS or OFF | same region, a second buffer on that track | +256 words. Four independent tracks: 2,048, not 1,024 |
+| Voice state (both phases, FM, morph cursors, trig) | same region, per CUBE track | about 16 words while linked. A few more for B’s own cursor when it has its own cycle |
 | Program | Dynload P arena, one image per core that has a CUBE track, not per track and not a static cave beside stock | aim under 400 words |
 
 1,024 words is modest next to 36K and still has to be a **measured** hole
@@ -621,11 +761,18 @@ Per sample, per sounding oscillator, after the cycle is already mixed:
 over the same 256 words, about **+15–20**. FM is a few more arithmetic
 ops on the increment, about **+8–12**. Hard morph (MORPH = 0) never builds
 a new cycle, so the per-sample total stays near **30–55** modelled cycles
-for A+B. The top of that range charges 97 and does not fit four times on
-core 0 (388 against a 384 remainder). The counted loop has to land at
-**54** modelled cycles, 95 charged, or the fourth track on tracks 5–8
-stays silent. It has to be counted with `cycle_count.py` before it is
-believed; the figures here are estimates.
+for A+B reading one buffer. The top of that range charges 97 and does not
+fit four times on core 0 (388 against a 384 remainder). The counted loop
+has to land at **54** modelled cycles, 95 charged, or the fourth track on
+tracks 5–8 stays silent.
+
+B’s own cube position does not add a third oscillator. The second pass
+was already the unison pass. POS and OFF make that pass read B’s buffer
+instead of A’s. The planning target for that loop is the same **54**. A
+second full oscillator on top, about +20 modelled, is the miss case in
+[section 5](#instances-memory-and-cycles): 74 modelled, 130 charged, and
+core 0 then holds two such tracks, not four. It has to be counted with
+`cycle_count.py` before it is believed; the figures here are estimates.
 
 Drop-sample playback (ignore the fraction) is cheaper and harsher.
 **Uncertain** whether the hardware does it. It is not the default. It can
@@ -641,23 +788,31 @@ core 0. Do not put it in the sample loop.
 
 Instead, maintain the 256-word current cycle and **spread** the rebuild:
 
-- When X/Y/Z/MORPH are still, the sample loop only plays the buffer.
-  Cost of morph: zero.
-- When they move, blend toward the new cell a few frames of the buffer
-  per 16-sample block (about 16 MAC pairs per block is about one extra
-  cycle per sample). A full 256-point crossfade then takes 16 blocks,
-  about **6 ms**. Knob moves, p-locks, and the Octatrack’s LFOs are not
-  audio-rate CV. A 6 ms morph is inaudible as lag and is the difference
-  between four tracks fitting and none fitting.
+- When the axes and MORPH are still, the sample loop only plays the
+  buffer or buffers. Cost of morph: zero.
+- When they move, blend toward the new cell a few frames of a buffer per
+  16-sample block (about 16 MAC pairs per block is about one extra cycle
+  per sample). A full 256-point crossfade then takes 16 blocks, about
+  **6 ms**. Knob moves, p-locks, and the Octatrack’s LFOs are not
+  audio-rate CV.
+- BOTH and PITCH dirty one buffer. POS and OFF can dirty two. Both
+  rebuilds share that one block of MACs, so two dirty buffers take about
+  **12 ms** each instead of 6. The sample loop does not gain a second
+  extra cycle. One extra modelled cycle on every voice is already a
+  55-cycle model, and four of those miss core 0 (section 2). A 12 ms morph
+  is still not a per-sample trilinear lookup. Per-sample trilinear is
+  what does not fit.
 - The blend is time-domain linear, one axis at a time according to the
   MORPH bits, so disabling an axis is “copy that neighbour’s index, do
   not mix”, which is what the manual describes.
 - The eight corner cycles (2,048 words) are copied from DRAM into a small
   DSP scratch **when the integer cell changes**, not every sample. 2,048
   words is a host transfer. Do it between blocks, while building the
-  control record, not inside the sample `do`. If the transfer cannot
-  finish in one frame, keep playing the old cycle until it does. A late
-  table is a late morph, not a glitch and not a stalled sequencer.
+  control record, not inside the sample `do`. A and B share that scratch.
+  When their cells differ, B’s corners follow A’s in a later block. If the
+  transfer cannot finish in one frame, keep playing the old cycle until
+  it does. A late table is a late morph, not a glitch and not a stalled
+  sequencer.
 
 Audio-rate XYZ, the thing a modular CV input can do, is **not** available.
 The Octatrack has no audio-rate feed into a SRC knob. Document that. Do
@@ -685,20 +840,22 @@ plays. A reset click on a user table is the table.
 
 | Limit | Choice |
 |---|---|
-| Voices per track | **One** note. Unison is a second phase on that note, not a second note. |
+| Voices per track | **One** note. B is a second phase on that note, or a drone at its own pitch. It is not a second note and not a second trig. |
 | Tracks | Up to eight, one each, subject to the core price. |
 | Per core | Four tracks. Core 0 (tracks 5–8) is the tight one. |
 | Chords | Not in this machine. FM Synth and POLY8 already do paraphony, and they own their own pages. |
 | If the price does not fit | That track stays silent (the `ot_machines` rule). Do not steal cycles from another track’s FX. |
 
-Declare `source_voice` as the measured per-sample cost of A+B with FM and
-hard morph, and `source_engine` as 0. A non-zero engine price is charged
-once per core on top of every voice (`dsp.c`), and core 0’s four-voice
-margin at the 54-cycle target is four charged cycles, so an engine price
-does not fit there. Kind is modelled until a hardware figure exists, so
-the 7/4 charge applies. Four CUBE tracks on core 0 must still leave every
-FX slot its 342-cycle reserve. The per-track instance table is in
-[section 5](#instances-memory-and-cycles).
+Declare `source_voice` as the measured per-sample cost of A+B with FM,
+hard morph, and B on its own cycle, and `source_engine` as 0. The
+descriptor carries one voice price (`dsp.c`), so a track that can flip
+LINK to POS or OFF has to be admitted at that worst price. A non-zero
+engine price is charged once per core on top of every voice, and core 0’s
+four-voice margin at the 54-cycle target is four charged cycles, so an
+engine price does not fit there. Kind is modelled until a hardware figure
+exists, so the 7/4 charge applies. Four CUBE tracks on core 0 must still
+leave every FX slot its 342-cycle reserve. The per-track instance table
+is in [section 5](#instances-memory-and-cycles).
 
 ### Fixed-point habits already paid for
 
@@ -866,9 +1023,9 @@ legal to be uploaded.
 
 **Inferred** from section 4 and from the charge formula. These are not
 `cycle_count.py` results and not hardware figures. The sample loop plays
-one pre-mixed 256-word cycle; unison is a second phase on that buffer;
-morph is spread across blocks. Trilinear-per-sample does not fit and is
-not in this table.
+pre-mixed cycles, one shared by A and B, or two when LINK is POS or OFF.
+B is a second pass on that note, not a second trig. Morph is spread
+across blocks. Trilinear-per-sample does not fit and is not in this table.
 
 Shared versus per track:
 
@@ -876,25 +1033,40 @@ Shared versus per track:
 |---|---|---|
 | Program image | One per core that has a CUBE track | Dynload P arena. Paid once, not per track |
 | Cube | One for the whole unit | ColdFire DRAM, 262,144 bytes. Not copied per track |
-| Playing cycle | One 256-word buffer per CUBE track | DSP data on that track’s core |
-| Phase, increment, FM, morph cursor | Per CUBE track | Same core. Section 4’s planning figure is about 16 words; a few dozen still does not move the cycle budget. The voice sets the real size |
-| Corner cycles (2,048 words) | Not kept per track | Stream from DRAM into the 256-word buffer between blocks. Four resident corner sets would be 8,192 words on the tight core for a morph that is not audio-rate |
+| Playing cycle | One 256-word buffer per CUBE track, plus a second 256 when that track’s LINK is POS or OFF | DSP data on that track’s core |
+| Phase, increment, FM, morph cursor | Per CUBE track | Same core. Section 4’s planning figure is about 16 words. B’s own cursor adds a few more. Neither moves the cycle budget. The voice sets the real size |
+| Corner cycles (2,048 words per cell) | Not kept per track | Stream from DRAM into the cycle buffer between blocks. A second cell, when B’s position differs, is a second stream, not a second resident copy. Four tracks times two resident corner sets would be 16,384 words on the tight core |
 | Effect Y blocks | Untouched | X:`0x255` stays with FX1/FX2 |
 
 DSP data for the cycle buffers alone, plus the planning figure for state:
 
-| CUBE tracks on that core | Cycle words | State, planning figure | Program images |
-|---|---:|---:|---|
-| 1 | 256 | ~16 | One, on that core |
-| 2 | 512 | ~32 | One |
-| 4 | 1,024 | ~64 | One |
-| 8, four per core | 1,024 per core | ~64 per core | One per core |
+| CUBE tracks on that core | Cycle words, LINK shares B | Cycle words, every track POS or OFF | State, planning figure | Program images |
+|---|---:|---:|---:|---|
+| 1 | 256 | 512 | ~16 | One, on that core |
+| 2 | 512 | 1,024 | ~32 | One |
+| 4 | 1,024 | 2,048 | ~64 | One |
+| 8, four per core | 1,024 per core | 2,048 per core | ~64 per core | One per core |
 
 The cube is not in this sum. Eight tracks do not multiply DRAM by eight.
+2,048 words of cycles on the tight core is still a measured hole, not a
+reason to keep B’s corners resident.
 
-Cycle price, modelled voice **54**, engine **0**, charge `(7 * 54 + 3) / 4 = 95`
-per voice. Effect slots stay at the 342 reserve (8 × 342 = 2,736). Remainder
-before any source voice: core 0 **384**, core 1 **829**.
+Cycle price depends on which loop was counted. The target is still modelled
+**54**, engine **0**, charge `(7 * 54 + 3) / 4 = 95` per voice. That target
+already includes B’s second pass (the old unison pass). POS and OFF change
+which buffer that pass reads. In-flight morph stays inside the 54 by
+sharing one MAC block across dirty buffers (section 4). Effect slots stay
+at the 342 reserve (8 × 342 = 2,736). Remainder before any source voice:
+core 0 **384**, core 1 **829**.
+
+If `cycle_count.py` says the second buffer costs a full extra oscillator,
+use the miss row. That is about +20 modelled on the 54, so **74** modelled
+and `(7 * 74 + 3) / 4 = 130` charged. The descriptor has one
+`source_voice`, so this miss price would be charged even for BOTH unless
+the claim learns the track’s LINK. Learning it is a base change beside the
+machine-table room, not a second price hidden in the module.
+
+At the **54 / 95** target, shared cycle or B’s own cycle:
 
 | Layout | Charged source | Against | Result |
 |---|---:|---|---|
@@ -906,8 +1078,26 @@ before any source voice: core 0 **384**, core 1 **829**.
 
 A **55**-cycle model charges 97. Four of those are 388 and the fourth
 claim on core 0 returns `RUNTIME_CYCLES`. That track stays silent. Core 1
-still accepts it. The sample loop is aimed at 54 so the four-track case
-on tracks 5–8 is the one that fits, not the one that refuses.
+still accepts it. Two dirty morphs must not be that 55th cycle. The
+sample loop is aimed at 54 so the four-track case on tracks 5–8 is the
+one that fits, not the one that refuses.
+
+At the **74 / 130** miss, if B’s own cycle is a full extra oscillator:
+
+| Layout | Charged source | Against | Result |
+|---|---:|---|---|
+| 1 track, either core | 130 | 384 or 829 | Fits |
+| 2 tracks, same core | 260 | 384 or 829 | Fits. Core 0 has 124 charged cycles left |
+| 3 tracks on core 0 | 390 | 384 | Does not fit. Over by 6 |
+| 4 tracks, panel 5–8 (core 0) | 520 | 384 | Does not fit. Over by 136. The fourth claim is refused and that track is silent |
+| 4 tracks, panel 1–4 (core 1) | 520 | 829 | Fits, 309 charged cycles left |
+| 8 tracks | 520 and 520 | 384 and 829 | Does not fit. Core 0 holds two, not four |
+
+So 1, 2, 4, and 8 still fit only while the counted two-buffer loop stays
+at 54. Four independent tracks on tracks 1–4 still fit even at 130. Four
+on tracks 5–8, and therefore all eight, do not fit at 130. Default LINK
+BOTH does not get the cheap price unless the counted loop is actually
+cheap, or the claim is allowed to follow LINK.
 
 What else moves the remainder:
 
@@ -922,9 +1112,10 @@ What else moves the remainder:
 - CUBE does not free an effect slot and does not consume one. A CUBE
   track still has FX1 and FX2. Eight CUBE tracks still have sixteen
   effect slots, each reserving at least 342 before the source sum.
-- Polyphony stays **one note per CUBE track**. Unison is the second
-  phase already inside the 54. A FLEX track is not an extra CUBE voice.
-  Chords stay with FM Synth and POLY8.
+- Polyphony stays **one note per CUBE track**. B’s second pass is inside
+  the 54 when the count hits the target. A FLEX track is not an extra
+  CUBE voice. Chords stay with FM Synth and POLY8. A drone is still that
+  one note, at a pitch that ignores A.
 - A refused claim does not steal cycles from a neighbour. The refused
   track renders the silent source. The tracks that fit keep playing.
 
@@ -1095,13 +1286,13 @@ around it. Step 2 is host-only and may run beside it.
 | Step | Delivers | Depends on | Done when |
 |---|---|---|---|
 | 0 | The sequencer starts on hardware with the dynload platform linked. Residency off and Turing absent first; then one no-op probe. Cause written down. The emulator models the four gaps above | Nothing in CUBE | On a named unit: trig LEDs chase, MIDI clock and notes leave, start/stop still leave, audio frames continue. Forcing the cause in the port reproduces the hang; the fix removes it |
-| 1 | Base change, owner review, not the module: `ot_machines` room enough for CUBE beside the contributed machines that image should combine, and a source package in the dynload catalog that is not an effect id | Step 0 | The loader accepts the new record. Stock rows stay in order. The sixteen effect slots stay effects. CUBE’s program admits through the source claim |
-| 2 | Original cube generator and a host reference oscillator: axes, morph bits, 14 Hz mute, thru-zero FM, unison, tone masks | None | Vectors: known sine, known alias of a 256-point saw at C4, morph-off equals one frame, morph-on is the linear mix, FM sign flip |
-| 3 | DSP56300 voice in `dsp_host` only, one voice, both payload bases. Sample loop at or under 54 modelled cycles, engine price 0 | Step 2 | `cycle_count.py` floor meets that target. Four charged voices are 380 or less. Reference residual met. Dirty-state init silent |
-| 4 | Per-track loading: one shared program image per core, per-track state and 256-word cycle, `source_voice` / `source_engine` claim. Upload only while stopped | Steps 0, 1, and 3 | CUBE on track 1, FLEX on track 2, tried on both cores. Leaving CUBE returns the track to FLEX. A neighbour stock machine keeps its source and both effect slots. The sequencer runs. A refused track is silent |
-| 5 | The instance matrix: 1, 2, 4 on tracks 5–8, 4 on tracks 1–4, and 8 | Step 4 | Admission matches the table in this section. Core 0’s four-cycle margin holds, or the extra track is silent. A stock effect on a CUBE track is still selectable. No effect slot was consumed by the voice |
+| 1 | Base change, owner review, not the module: `ot_machines` room enough for CUBE beside the contributed machines that image should combine, a source package in the dynload catalog that is not an effect id, and, if the pattern track has no spare for six OSC B locks, the lock-record extension | Step 0 | The loader accepts the new record. Stock rows stay in order. The sixteen effect slots stay effects. CUBE’s program admits through the source claim. A BX lock has a byte that is not slot 0–5 or slot 30 |
+| 2 | Original cube generator and a host reference oscillator: axes, morph bits, 14 Hz mute, both FM laws, UNI, and all four LINK values including the drone | None | Vectors: known sine, known alias of a 256-point saw at C4, morph-off equals one frame, morph-on is the linear mix, FM sign flip, BOTH matches v1, POS uses BX, PITCH and OFF ignore A’s note, LAW OFF is dry |
+| 3 | DSP56300 voice in `dsp_host` only, one voice, both payload bases, both cycle buffers. Sample loop at or under 54 modelled cycles with B on its own cycle, engine price 0. If the count is the 74-cycle miss, record 130 charged and do not claim four-wide on core 0. Teaching `source_voice` to follow LINK is a base change, done with step 1, and only then may BOTH stay at 95 while OFF pays 130 | Step 2 | `cycle_count.py` floor meets the target that the instance table will use. Reference residual met for BOTH and OFF. Dirty-state init silent. Two dirty morphs do not add a per-sample trilinear |
+| 4 | Per-track loading, plus the SRC ring and the OSC B Part bytes. One shared program image per core, per-track state and cycle buffers, `source_voice` / `source_engine` claim. Upload only while stopped | Steps 0, 1, and 3 | CUBE on track 1, FLEX on track 2, tried on both cores. Double tap walks SRC, SETUP, OSC B on the CUBE track only. A single SRC press shows SRC. FUNC+SRC opens SETUP. Flex double-tap still opens Flex SETUP. A BX lock does not change that step’s X lock. Leaving CUBE returns the track to FLEX. The sequencer runs. A refused track is silent |
+| 5 | The instance matrix: 1, 2, 4 on tracks 5–8, 4 on tracks 1–4, and 8, each in BOTH and in OFF | Step 4 | Admission matches the table for the price step 3 actually counted. At 54, core 0’s four-cycle margin holds or the extra track is silent. At 130, core 0 admits two OFF tracks and refuses the third. A stock effect on a CUBE track is still selectable. No effect slot was consumed by the voice |
 | 6 | User cube from the sample pool, transport stopped, fallback to the built-in cube | Step 4 | A wrong-sized buffer is rejected. A valid 256×512 buffer changes Z = 0 |
-| 7 | Hardware, owner or author, version-matched, of the voice rather than of the empty platform | Steps 4 and 5 | Heard on a named unit: one track, four on tracks 5–8, four on tracks 1–4, eight, p-locks, LFO, Part reload, power cycle. Sequencer does not stick. Chip timing recorded separately from the modelled floor |
+| 7 | Hardware, owner or author, version-matched, of the voice rather than of the empty platform | Steps 4 and 5 | Heard on a named unit at the admitted price: one track, the layouts step 5 allowed, OSC B locks, LFO on BX, Part reload, power cycle. Sequencer does not stick. Chip timing recorded separately from the modelled floor |
 
 SYNC HARD and the external-input waveshaper wait until step 4’s TRIG path
 is already right. The hardware sync law is uncertain, and the buggy mute
@@ -1113,19 +1304,21 @@ behaviour must not be copied.
 |---|---|---|
 | Sequencer never starts | Michael reports that any image with the dynload platform fails this way on hardware, including Turing left out and including the mailbox alignment attempt. The emulator does not show it. The transport README already says the core-select repair had no hardware test | Step 0 before any CUBE upload. Instrument the idle hook, not a new voice. Teach the port the four gaps in section 5. Do not realign `dl_tx` / `dl_rx` and do not toggle Turing as the next experiment |
 | `ot_machines` is full | Room 4, and four modules already subscribe. Dynload adds no chooser row | An image that omits one current contributed machine can take the free seat beside stock. An image that wants all four as well needs step 1, in the base, before the module. Do not poke the chooser length from the module, and do not hide CUBE in an effect id |
-| Tight core | 384 cycles left on tracks 5–8 after eight stock FX reserves. Four voices at 54 modelled cycles leave four charged cycles | Sample loop stays on one pre-mixed cycle. Engine price stays 0. Morph is spread. If the count misses, drop unison before dropping linear interpolation, and let the extra track go silent |
+| Tight core | 384 cycles left on tracks 5–8 after eight stock FX reserves. Four voices at 54 modelled cycles leave four charged cycles. Four voices at the 74-cycle miss charge 520 and do not fit | Keep the two-buffer loop inside 54. Engine price stays 0. Both morphs share one MAC block. If the count is 130 charged, core 0 admits two independent tracks, not four, and eight tracks do not fit. Drop UNI’s second-pass detail before dropping linear interpolation |
+| SRC double tap | Stock double-tap of SRC opens SETUP. The ring’s second double tap, on a CUBE track, opens OSC B instead. From OSC B a further double tap returns to SRC, not to SETUP | First double tap from SRC still opens SETUP. FUNC+SRC opens SETUP from any page. A single SRC press always shows SRC. Other machines are untouched. If the tap cannot be wrapped per track, do not claim the key and do not add a private timer |
+| OSC B locks | Slots 0–5 are A’s page. Slot 30 is POLY8’s chord. Slot 31 is the sample. Six new lock bytes are not in that map | A BX lock must not write slot 1. Measure a hole or extend the pattern record in the base review. Part save is not a substitute for the held-trig test |
+| One voice price | `source_voice` is one number per machine. A BOTH track and an OFF track on the same core are admitted alike | Declare the worst counted price, or teach the claim to follow LINK in that same base review. Do not admit OFF at the BOTH price |
 | Effect cost above the reserve | `slot_charge` takes the max of the slot and 342, and that sum is added before the source voices | Four CUBE tracks on core 0 assume every slot is at the reserve. A heavier effect on tracks 5–8 spends the margin. Tracks 1–4 have the headroom |
 | Estimates are not counts | Section 4’s cycle numbers are inferred floors | Step 3 replaces them. Contention and the MKII’s 1.42–1.74× factor remain until step 7 |
 | Chromatic takes are first-wins | Quantizer and FM Synth already subscribe. A claims function that accepts every track would steal theirs, or theirs would steal CUBE | Claims only CUBE tracks, order 10–29. Test PTCH bytes with Scale Quantizer installed |
-| Descriptor formatter | A cloned page draws the donor’s law | Write the formatter. Semitone PTCH, enumerated OCT/TONE/MORPH/SYNC |
+| Descriptor formatter | A cloned page draws the donor’s law | Write the formatter for all three pages. Semitone PTCH and BPCH. Enumerated OCT, TONE, MORPH, SYNC, LINK, and LAW |
 | Stored bytes | A value outside the count stalls the sequencer | Counts fixed above. `stamp-defaults` before play on old projects. Append-only enums |
 | Payload A versus B | Absolute table addresses differ | Build-supplied bases. Render both cores in step 3 |
-| Data RAM versus the arena | Datasheet RAM is not free. The program can live in the dynload arena; the per-track cycles cannot | Measure a hole for the 256-word buffers. Do not reuse Analog BD’s addresses. Do not take an X:`0x255` entry. Do not require SPRING to be absent unless that measurement says so, and then declare the conflict |
+| Data RAM versus the arena | Datasheet RAM is not free. The program can live in the dynload arena; the per-track cycles cannot. POS and OFF add a second 256-word buffer on that track | Measure a hole for two cycle buffers, not one. Do not reuse Analog BD’s addresses. Do not take an X:`0x255` entry. Do not require SPRING to be absent unless that measurement says so, and then declare the conflict |
 | Cube size versus the 256 KiB DSP staging limit | Unpacked 24-bit cube does not fit | DRAM plus a 256-word working set per CUBE track |
 | Factory content | Named banks are other people’s work. The product name is a trademark | Original cycles only. Chooser label CUBE, not Piston Honda |
 | Alias pitch will not match the hardware | Module sample rate is unpublished; the Octatrack is 44.1 kHz | State it in the module README. Do not oversample to chase it |
 | Tone and sync laws | Unnamed tone modes; sync firmware reports disagree | Orthodox plus two original masks. SYNC TRIG first. Do not implement the mute bug |
-| Dual independent positions | The hardware stores a separate X/Y/Z per oscillator. Six SRC knobs cannot hold both and still keep PTCH | v1 shares one position. B is unison and the FM source. A second position is a later page, not a silent reuse of these bytes |
 | USB lifecycle | New Octatrack modules are expected to Try/Keep/Undo | The ColdFire record can use that path. Keep must not be the first moment program words move. Upload only while the transport is stopped, and only after step 0 |
 | Fidelity without a unit | No listening was done for this note | Step 2’s vectors are the contract. A hardware A/B against a Mk3 is optional and must not add factory samples to the repo |
 
@@ -1135,15 +1328,25 @@ Chooser name **CUBE**. One note per track. Stock AMP is the envelope.
 
 **SRC:** PTCH, X, Y, Z, FM, MIX.
 
-**SETUP:** FINE, OCT, UNI, TONE, MORPH, SYNC.
+**SETUP** (FUNC+SRC, or one double tap of SRC): FINE, OCT, UNI, TONE, MORPH, SYNC.
+
+**OSC B** (the next double tap): BX, BY, BZ, LINK, LAW, BPCH.
 
 PTCH is the chromatic and MIDI note (0 semitones ≈ C4). X/Y/Z scan an
 8×8×8 cube of original 256-sample, 16-bit cycles, linear between
-neighbours unless MORPH turns that axis off. FM is thru-zero from the
-unison oscillator. The cube stays in ColdFire DRAM, one copy for every
-track. The DSP plays one pre-mixed cycle per CUBE track from one shared
-program image per core, uploaded through dynload while the transport is
-stopped. Tracks that are not CUBE keep their stock machines and their
-effect slots. Four CUBE tracks are the goal on the tighter core (tracks
-5–8); a track that does not fit is silent. Nothing is uploaded until an
-image that merely contains the platform starts the sequencer on hardware.
+neighbours unless MORPH turns that axis off. A single SRC press always
+shows SRC. FUNC+SRC always opens SETUP. The double tap walks the ring
+only on a CUBE track; from SRC it still opens SETUP, which is what stock
+does. LINK defaults to BOTH: B uses A’s position and A’s note, plus BPCH
+and UNI. POS and OFF give B its own cycle. PITCH and OFF make B a drone
+at BPCH, still under the track’s amp. LAW defaults to thru-zero linear
+FM. The cube stays in ColdFire DRAM, one copy for every track. The DSP
+plays from one shared program image per core, uploaded through dynload
+while the transport is stopped. The sample loop stays at 54 modelled
+cycles (95 charged) with B on its own buffer; four such tracks fit core
+0 with four charged cycles left, and eight fit as four per core. A
+counted 74 (130 charged) fits four on tracks 1–4 and only two on tracks
+5–8, so eight does not fit. Tracks that are not CUBE keep their stock
+machines and their effect slots. A track that does not fit is silent.
+Nothing is uploaded until an image that merely contains the platform
+starts the sequencer on hardware.
