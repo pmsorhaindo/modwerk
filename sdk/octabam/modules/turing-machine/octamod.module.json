@@ -1,0 +1,236 @@
+{
+  "schemaVersion": 2,
+  "id": "turing-machine",
+  "key": "TURING MACHINE",
+  "name": "Turing Machine",
+  "version": "0.3.0-experimental",
+  "category": "midi-usb",
+  "author": {
+    "github": "pmsorhaindo",
+    "credits": [
+      "pmsorhaindo",
+      "octabam: Sam Banks; additional source attribution in SDK THIRD_PARTY.md"
+    ]
+  },
+  "nativeManifest": "manifest.py",
+  "presentation": {
+    "label": "MIDI GENERATOR",
+    "family": "Sequencing",
+    "summary": "Looping shift registers write the notes of the Octatrack's MIDI tracks.",
+    "overview": "In the style of the Music Thing Modular Turing Machine: each MIDI track can run its own loop of bits, 2 to 64 steps long, which advances once per sequencer step. LOCK decides how often the bit coming round flips (64 random, 96..127 locked, 25 a slow slip), SCAL the pitch range around the track's NOTE (NOTE only to four octaves), DENS how many steps are notes rather than rests. A push of knob A writes the current sequence into the track's own trigs. The first phrase after a boot comes from the moment PLAY is pressed.",
+    "highlights": [
+      "A 64-step register per MIDI track and pattern, with its own LOCK, LEN, SCAL and DENS",
+      "LOCK like the Turing Machine: noon random, 3 o'clock and up locked, 9 o'clock slips; FUNC snaps 0/64/127",
+      "Rests that loop with the phrase (DENS); NEI on the next track follows the notes",
+      "WRITE: push knob A to turn the phrase into ordinary trigs (MIDI TRACK WRITTEN)",
+      "Settings saved with the project; a new project starts with every track OFF",
+      "The step's locks, the LFO, TRAN, the arpeggiator and its KEY act on the Turing notes"
+    ],
+    "usage": [
+      "On a MIDI track press AMP, then double-tap AMP twice (ARP SETUP, then TURING). Knob A switches the track's Turing ON.",
+      "LOCK (B): 64 random, 96+ repeats, 25 slips (FUNC + turn snaps); LEN (C) the loop; SCAL (D) the range; DENS (E) notes vs rests.",
+      "Push knob A to write the phrase into the track's trigs; MODE OFF then plays it from the trigs.",
+      "PROJECT > CONTROL > MIDI SEQUENCER > TURING FIRST ON makes a single AMP press show TURING."
+    ]
+  },
+  "controls": [
+    {
+      "name": "MODE",
+      "default": 0,
+      "count": 2,
+      "doc": "TURING page knob A, per MIDI track: OFF leaves the track stock; ON lets its register write the notes",
+      "labels": [
+        "OFF",
+        "ON"
+      ]
+    },
+    {
+      "name": "LOCK",
+      "default": 64,
+      "count": 128,
+      "doc": "TURING page knob B, per pattern and MIDI track: the chance the bit at the loop point flips: 96..127 never (the loop repeats), 64 a half (random), 25 one bit a pass (slip), 0 four bits a pass; straight between (README table). FUNC + turn snaps to 0, 64, 127",
+      "labels": null
+    },
+    {
+      "name": "LEN",
+      "default": 16,
+      "count": 63,
+      "doc": "TURING page knob C, per pattern and MIDI track: the loop length in steps, 2 to 64 (default 16)",
+      "labels": null
+    },
+    {
+      "name": "SCAL",
+      "default": 64,
+      "count": 128,
+      "labels": null,
+      "doc": "TURING page knob D, per pattern and MIDI track: the pitch range centred on NOTE: 0 NOTE only, 64 NOTE-12..NOTE+12, 127 NOTE-24..NOTE+24 (README table)"
+    },
+    {
+      "name": "DENS",
+      "default": 64,
+      "count": 128,
+      "labels": null,
+      "doc": "TURING page knob E, per pattern and MIDI track: how many steps are notes: 0 none, 64 about half, 127 every step; rests loop with the phrase"
+    },
+    {
+      "name": "TURING FIRST",
+      "default": 0,
+      "count": 2,
+      "doc": "PROJECT > CONTROL > MIDI SEQUENCER, project-wide: ON makes TURING the first of AMP's pages (ARP, ARP SETUP, TURING) on every MIDI track",
+      "labels": [
+        "OFF",
+        "ON"
+      ]
+    }
+  ],
+  "compatibility": {
+    "firmware": "1.40C",
+    "location": "MIDI tracks",
+    "conflicts": [],
+    "limitations": [
+      "Chromatic notes 0..24 semitones above each trig's NOTE; scale stages come later.",
+      "Settings are saved per project as #TURING_T<n> and #TURING_FIRST lines that stock loaders skip, not per Part. The registers are runtime state; a STOP and PLAY or a reload keeps them.",
+      "The boot seed is read from DMA timer 3 at the first Turing trig; the timer's behaviour on hardware is inferred from stock's own programming of it, not measured.",
+      "Not tested: arpeggiator, NOTE parameter locks, incoming MIDI notes, Part or pattern changes while playing, timing under load, hardware."
+    ],
+    "effectId": null
+  },
+  "resources": {
+    "recorded": "Not measured",
+    "storage": {
+      "label": "Storage",
+      "display": "Not measured",
+      "value": null,
+      "unit": "unknown",
+      "method": "unmeasured",
+      "conditions": "No measurements exist yet. Add exact conditions and source evidence when available.",
+      "source": "TESTING.md"
+    },
+    "processing": {
+      "label": "CPU / DSP load",
+      "display": "Not measured",
+      "value": null,
+      "unit": "unknown",
+      "method": "unmeasured",
+      "conditions": "No measurements exist yet. Add exact conditions and source evidence when available.",
+      "source": "TESTING.md"
+    }
+  },
+  "tests": {
+    "report": "TESTING.md",
+    "summary": "Emulator only: verify.py drives the panel under the ColdFire port, reads MIDI OUT and checks every note against a model of the engine with a fixed test seed, then boots twice without it. Cycles, memory totals and hardware are not measured.",
+    "hardwareStatus": "untested",
+    "evidenceRevision": "b8deefc88b2c3e5f3c6158e364eb741df1924e1d",
+    "gates": [
+      "modules/turing-machine/verify.py"
+    ]
+  },
+  "license": {
+    "spdx": "MIT",
+    "file": "LICENSE",
+    "declaration": "Original module source by pmsorhaindo under the MIT licence in LICENSE, built with octabam by Sam Banks. No Elektron firmware, extracted routines or tables are included; stock bytes are referenced by address, length and SHA-256. Original OT LCD captures are declared in media/LICENSE.md as LicenseRef-OT-UI-Documentation; underlying Elektron rights remain reserved. Reviewer verification is required before publication and is not automatic legal clearance."
+  },
+  "media": [
+    {
+      "path": "media/ot-location.png",
+      "captureType": "emulator",
+      "caption": "Press PROJ, select CONTROL and press RIGHT, then select MIDI SEQUENCER and press YES.",
+      "alt": "PROJECT menu with CONTROL selected and MIDI SEQUENCER highlighted in its list.",
+      "credit": "Modwerk contributors (headless capture)",
+      "license": "LicenseRef-OT-UI-Documentation",
+      "source": "original",
+      "otUi": {
+        "page": "PROJECT > CONTROL",
+        "shows": "location",
+        "firmware": "1.40C",
+        "moduleVersion": "0.1.0-experimental",
+        "imageSha256": "f2ce92f57b2fbe5cce4d2611ffbdb07d7b47b3149084718da7b32b1831199a9d",
+        "setup": "Headless ot_emu built from this repository's tools/emu/ot_emu (emulator SHA-256 2360ffb24483...); MKII panel; native octabam image of TURING MACHINE alone; empty scratch card; transport stopped; actual 128x64 LCD at integer scale 6 in monochrome. Panel plan in media/capture.json."
+      }
+    },
+    {
+      "path": "media/ot-row-first.png",
+      "captureType": "emulator",
+      "caption": "TURING FIRST sits under CC DIRECT CONNECT. ON makes AMP show TURING first on every MIDI track.",
+      "alt": "MIDI SEQUENCER page: CC DIRECT CONNECT checked, TURING FIRST ON selected.",
+      "credit": "Modwerk contributors (headless capture)",
+      "license": "LicenseRef-OT-UI-Documentation",
+      "source": "original",
+      "otUi": {
+        "page": "CONTROL > MIDI SEQUENCER",
+        "shows": "controls",
+        "firmware": "1.40C",
+        "moduleVersion": "0.1.0-experimental",
+        "imageSha256": "1cff946a257718585d5c6a12a1d918c477f64a7a19abcbca91a58ab775b3b4b7",
+        "setup": "Headless ot_emu built from this repository's tools/emu/ot_emu; MKII panel; the OCTABAM6 payload (OCTABAM_STATIC_STOCK=1 make bus REMIX=turing BUILD=6, SHA-256 of out/mainos_bus.bin given); empty scratch card; transport stopped; actual 128x64 LCD at integer scale 6 in monochrome. Made by diag/turing_page_shots6.py."
+      }
+    },
+    {
+      "path": "media/ot-page-default.png",
+      "captureType": "emulator",
+      "caption": "The TURING page: on a MIDI track, AMP and then two double taps (or one press with TURING FIRST ON). Knobs A..E are MODE, LOCK, LEN, SCAL and DENS for the active MIDI track.",
+      "alt": "MIDI TURING page: MODE OFF, LOCK dial at 64, LEN 16, SCAL and DENS dials at 64; F empty.",
+      "credit": "Modwerk contributors (headless capture)",
+      "license": "LicenseRef-OT-UI-Documentation",
+      "source": "original",
+      "otUi": {
+        "page": "MIDI > AMP > TURING",
+        "shows": "controls",
+        "firmware": "1.40C",
+        "moduleVersion": "0.3.0-experimental",
+        "imageSha256": "7ec11f74de12e861703cd2218a81c46cf6c35dd57da763c7ebb53fd1878a02a4",
+        "setup": "Headless ot_emu built from this repository's tools/emu/ot_emu; MKII panel; the OCTABAM10 payload (diag/octabam10/build_octabam10.sh, SHA-256 of out/mainos_bus.bin given); empty scratch card; actual 128x64 LCD at integer scale 6 in monochrome. Made by diag/octabam10/shots10.py."
+      }
+    },
+    {
+      "path": "media/ot-page-set.png",
+      "captureType": "emulator",
+      "caption": "T1 with MODE ON, LOCK 127, LEN 64, SCAL 100 and DENS 30.",
+      "alt": "MIDI TURING page: MODE ON, LOCK 127, LEN 64, SCAL 100, DENS 30.",
+      "credit": "Modwerk contributors (headless capture)",
+      "license": "LicenseRef-OT-UI-Documentation",
+      "source": "original",
+      "otUi": {
+        "page": "MIDI > AMP > TURING",
+        "shows": "controls",
+        "firmware": "1.40C",
+        "moduleVersion": "0.3.0-experimental",
+        "imageSha256": "7ec11f74de12e861703cd2218a81c46cf6c35dd57da763c7ebb53fd1878a02a4",
+        "setup": "Headless ot_emu built from this repository's tools/emu/ot_emu; MKII panel; the OCTABAM10 payload (diag/octabam10/build_octabam10.sh, SHA-256 of out/mainos_bus.bin given); empty scratch card; actual 128x64 LCD at integer scale 6 in monochrome. Made by diag/octabam10/shots10.py."
+      }
+    },
+    {
+      "path": "media/ot-page-written.png",
+      "captureType": "emulator",
+      "caption": "Knob A pushed with MODE ON: WRITE, and the stock popup.",
+      "alt": "MIDI TURING page with the popup MIDI TRACK WRITTEN.",
+      "credit": "Modwerk contributors (headless capture)",
+      "license": "LicenseRef-OT-UI-Documentation",
+      "source": "original",
+      "otUi": {
+        "page": "MIDI > AMP > TURING",
+        "shows": "popup",
+        "firmware": "1.40C",
+        "moduleVersion": "0.3.0-experimental",
+        "imageSha256": "7ec11f74de12e861703cd2218a81c46cf6c35dd57da763c7ebb53fd1878a02a4",
+        "setup": "Headless ot_emu built from this repository's tools/emu/ot_emu; MKII panel; the OCTABAM10 payload (diag/octabam10/build_octabam10.sh, SHA-256 of out/mainos_bus.bin given); empty scratch card; actual 128x64 LCD at integer scale 6 in monochrome. Made by diag/octabam10/shots10.py."
+      }
+    }
+  ],
+  "access": {
+    "location": "MIDI tracks: AMP's TURING page (knobs A MODE, B LOCK, C LEN, D SCAL, E DENS; push A: WRITE); PROJECT > CONTROL > MIDI SEQUENCER: TURING FIRST, under CC DIRECT CONNECT.",
+    "steps": [
+      "Press MIDI and select a MIDI track.",
+      "Press AMP (MIDI ARPEGGIATOR), double-tap AMP (MIDI ARP SETUP), double-tap again (MIDI TURING).",
+      "Turn knob A to ON, then B (LOCK), C (LEN), D (SCAL) and E (DENS); push A to WRITE.",
+      "Optional: PROJ > CONTROL > MIDI SEQUENCER > TURING FIRST ON, and a single AMP press shows TURING."
+    ],
+    "screenshots": [
+      "media/ot-page-default.png",
+      "media/ot-page-set.png",
+      "media/ot-page-written.png",
+      "media/ot-location.png",
+      "media/ot-row-first.png"
+    ]
+  }
+}

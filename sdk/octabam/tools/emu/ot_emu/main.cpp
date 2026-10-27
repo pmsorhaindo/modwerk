@@ -388,6 +388,7 @@ namespace
 		// whole screen and LED state is in that stream (the boot's full draw,
 		// then diffs), and a decoder fed from byte 0 has all of it.
 		size_t txCursor = 0;
+		size_t tx0Cursor = 0;	// tx0: UART0 (MIDI OUT) wire bytes
 		size_t hitCursor = 0, writeCursor = 0;	// `hits` / `writes` report since the previous call
 		double wallInRun = 0.0;
 		const auto reply = [](const std::string& _s)
@@ -593,14 +594,17 @@ namespace
 					reply("err usage: edmastatus");
 					continue;
 				}
-				std::string out = "edmastatus outstanding=" + std::to_string(_rtos.edma().outstanding()) + " gatedwaits=" + std::to_string(_rtos.edma().gatedWaits()) + " irq=";
+				std::string out = "edmastatus outstanding=" + std::to_string(_rtos.edma().outstanding()) + " gatedwaits=" + std::to_string(_rtos.edma().gatedWaits())
+					+ " cfgerrors=" + std::to_string(_rtos.edma().configErrors()) + " lasterror=" + std::to_string(_rtos.edma().lastError()) + " irq=";
 				for(uint32_t ch = 0; ch < 16; ++ch)
 					out += _rtos.edma().irq(ch) ? "1" : "0";
 				double nextDue = 0.0;
 				out += " nextdue=" + (_rtos.edma().nextDue(nextDue) ? std::to_string(nextDue) : std::string("none"));
 				out += " src1masked=" + std::to_string(_rtos.intc0().masked(1) ? 1 : 0) + " src8masked=" + std::to_string(_rtos.intc0().masked(8) ? 1 : 0)
 					+ " src1asserting=" + std::to_string(_rtos.intc0().assertedSource(1) ? 1 : 0) + " src8asserting=" + std::to_string(_rtos.intc0().assertedSource(8) ? 1 : 0)
-					+ " framepending=" + std::to_string(_rtos.framePending() ? 1 : 0) + " sample=" + std::to_string(_rtos.sample());
+					+ " framepending=" + std::to_string(_rtos.framePending() ? 1 : 0) + " sample=" + std::to_string(_rtos.sample())
+					+ " hwcore1at7=" + std::to_string(_rtos.machine().hwCore1AtState7()) + " hwcore0pulls7=" + std::to_string(_rtos.machine().hwCore0PullsAtState7())
+					+ " hwstopped=" + std::to_string(_rtos.machine().hwFramesStopped() ? 1 : 0);
 				reply(out);
 				continue;
 			}
@@ -759,6 +763,16 @@ namespace
 				}
 				_rtos.midiIn(bytes);
 				reply("ok");
+				continue;
+			}
+			if(cmd == "tx0")
+			{
+				const auto& tx = _rtos.serialTx0();
+				std::string out = "tx0 ";
+				static const char* const hx = "0123456789abcdef";
+				for(size_t i = tx0Cursor; i < tx.size(); ++i) { out += hx[tx[i] >> 4]; out += hx[tx[i] & 15]; }
+				tx0Cursor = tx.size();
+				reply(out);
 				continue;
 			}
 			if(cmd == "tx")

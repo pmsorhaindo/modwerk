@@ -314,6 +314,15 @@ namespace ot
 		// that can change a model's state or an interrupt line; the burst
 		// loop ends its burst on it (Rtos::runInternal).
 		bool takePeriphTouched() { const bool t = m_periphTouched; m_periphTouched = false; return t; }
+		// HARDWARE RULES (23 Oct 2026, diag/CLAUDE_REPORT4.md). Empirical rules
+		// measured on a real MKII by upstream modwerk (docs/OCTATRACK_HARDWARE_TRAPS.md,
+		// "Never select core 1 at state 7", dsp2-AB2, 10 Oct 2026) that this port's
+		// lock-step host port cannot reproduce from first principles. When one fires
+		// the port does what the unit did: the frames stop (Rtos keeps INTC0 source 1
+		// masked from then on). A rule, not a model of why. OT_HW_RULES=0 turns it off.
+		uint32_t hwCore1AtState7() const { return m_hwCore1At7; }		// DSP select switched to core 1 while the frame-transfer state is 7
+		uint32_t hwCore0PullsAtState7() const { return m_hwCore0Pulls7; }	// host command $89 (a read-back pull) to core 0 at state 7: counted only
+		bool hwFramesStopped() const { return m_hwFramesStopped; }
 
 		// The vector base register. The firmware sets it itself with a
 		// `movec %a0,%vbr` at 0x40000db6, so after a boot this reads
@@ -618,6 +627,9 @@ namespace ot
 		std::vector<uint8_t> m_autoScrap;		// where a write goes once the limit is hit
 		std::function<void(Machine&, uint32_t)> m_step;
 		bool m_periphTouched = false;
+		uint32_t m_hwCore1At7 = 0, m_hwCore0Pulls7 = 0;
+		int m_hwSel = 0;
+		bool m_hwFramesStopped = false;
 		const uint32_t* m_pcField = nullptr;
 		AckHook m_ack;
 		uint64_t m_instructions = 0;
