@@ -565,6 +565,18 @@ namespace ot
 
 		uint32_t tcdField(uint32_t _ch, uint32_t _off, uint32_t _n) const { return field(_ch, _off, _n); }
 
+		// Configuration errors (MCF54455RM, eDMA "Error reporting"): a channel
+		// whose SADDR/SOFF disagree with ATTR.SSIZE, DADDR/DOFF with DSIZE, or
+		// whose NBYTES is not a multiple of both sizes is refused when it is
+		// activated: no transfer, no DONE, no INTMAJOR. Until 22 Oct 2026 the
+		// port completed every channel, so a misaligned 16-byte burst (the
+		// DSP-dynload transport's dl_tx/dl_rx at 8 mod 16) ran here and halted
+		// the frame chain on the unit. OT_EDMA_CHECK=0 restores the old model.
+		uint64_t configErrors() const { return m_configErrors; }
+		uint32_t lastError() const { return m_lastError; }	// (channel << 24) | ES-style bits (below)
+		enum : uint32_t { ERR_DAE = 1u << 5, ERR_DOE = 1u << 4, ERR_NCE = 1u << 3, ERR_SAE = 1u << 7, ERR_SOE = 1u << 6 };
+		uint32_t configError(uint32_t _ch) const;
+
 	private:
 		uint32_t field(uint32_t _ch, uint32_t _off, uint32_t _n) const;
 		uint16_t csr(uint32_t _ch) const { return static_cast<uint16_t>(field(_ch, 0x1e, 2)); }
@@ -586,6 +598,8 @@ namespace ot
 		std::function<double(uint32_t)> m_hostDrainTime;	// O17c: see setHostDrainTime
 		std::function<bool(uint32_t)> m_canComplete;
 		uint64_t m_gatedWaits = 0;
+		uint64_t m_configErrors = 0;
+		uint32_t m_lastError = 0;
 	};
 
 	// ---- INTC --------------------------------------------------------------
