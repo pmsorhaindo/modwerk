@@ -4,7 +4,7 @@ Version: 0.3.0-experimental (OCTABAM11U) · author: [pmsorhaindo](https://github
 
 A ColdFire module for the native octabam build (`sdk/octabam`), built static-stock as upstream ships it
 (no DSP loader). Not in the catalog yet and without the base/USB lifecycle. Build it from `sdk/octabam` with
-`make image REMIX=turing` (selection in `remixes/turing/remix.py`). The design and the plan are in
+`make image REMIX=turing` (selection in `remixes/turing/remix.py`, which also lists every stock effect so the FX menus stay stock). The design and the plan are in
 [the feasibility study](../../../docs/turing-machine-feasibility.md) (fork PR #1).
 
 ## Overview
