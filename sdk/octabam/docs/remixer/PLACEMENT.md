@@ -192,6 +192,30 @@ skipped claim's target as a link-time symbol.
   `Detour.subst_return`. Reproduced and fixed under the port with `ot_emu
   --call`; hardware pending. `modules/kits-reload/README.md`.
 
+## DSP program memory (measured)
+
+Static-stock places module DSP code in harvested stock-effect code (an
+effect on neither chooser, `stock.harvested`). Above the stock P records
+each core also has unused program memory below the 8K wall (stock 1.40C
+record map, `tools/build/dsp_modmap.py`; stock B's only P writes are its
+self-modifying words at P:0x293/0x297/0x371/0x380):
+
+| core | payload | tracks | free top |
+|---|---|---|---|
+| 0 | A | 5-8 | 33 words, P:0x1fdf..0x1fff |
+| 1 | B | 1-4 | 609 words, P:0x1d9f..0x1fff |
+
+A hooks-only section with `DspSection(free_top=True)` on one payload lands
+there as one more P record of that payload's upload, booted as a pre-boot
+payload of octabam's loader (Analog BD's route, `tools/build/ab_records.py`);
+no stock effect gives up code. CUBE (tracks 1-4) was the first, 459 words.
+
+To prove a builder change here, `scripts/refhash.sh` does not work as is:
+Modwerk's tree carries no `remixes/bus`, so all 24 cases fail the same way
+on both trees and "bit-identical" proves nothing. Build a matrix of remixes
+(each module beside the stock rows, with and without the default harvest)
+on the old and new builder in one directory, and compare images and reports.
+
 ## Open
 
 - More than 10 MB is a bigger `PLATFORM_PAGES` (the ledger refuses below

@@ -408,8 +408,20 @@ class DspSection:
     # dispatch entry; one with a menu may carry hooks as well.
     hooks: tuple[DspHook, ...] = ()
     subst: Mapping[str, Mapping[str, str]] = field(default_factory=dict)
+    # FREE TOP: placed in the payload's program memory ABOVE every stock P
+    # record (below the 8K wall), not in harvested stock-effect code, so every
+    # stock effect keeps its words. The words go in as one more P record of
+    # the payload's upload, booted through octabam's loader as a pre-boot
+    # payload (Analog BD's route, tools/build/ab_records.py). One payload,
+    # hooks only. Measured room: payload B (core 1, tracks 1-4) 609 words at
+    # P:0x1d9f; payload A 33 (build_bus.py refuses what does not fit).
+    free_top: bool = False
 
     def __post_init__(self):
+        if self.free_top and (len(self.payloads) != 1 or not self.hooks or self.ptable
+                              or self.arena or self.bus_role is not BusRole.NONE
+                              or self.ybase is not YBase.NEVER):
+            raise ValueError("free_top: one payload, hooks only, no table, arena, bus role or Y base")
         if self.split_ptable and (not self.ptable or self.arena):
             raise ValueError("split_ptable needs a fixed nonempty ptable")
         if self.ptable2 and (not self.ptable or self.arena):
