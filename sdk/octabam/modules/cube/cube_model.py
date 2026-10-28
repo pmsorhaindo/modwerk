@@ -53,12 +53,16 @@ def controls(p):
     tone, morph, sync = clamp(p["TONE"], 3), clamp(p["MORPH"], 8), clamp(p["SYNC"], 3)
     link, law = clamp(p["LINK"], 4), clamp(p["LAW"], 3)
     cents_a = (p["PTCH"] - 64) * 100 + (p["FINE"] - 64) + (oct_ - 2) * 1200
-    inc_a = inc_of(cents_a)
     u = p["UNI"]
     uoct = -1200 if 97 <= u <= 111 else 1200 if u >= 112 else 0
     udet = UNIC[u] if 1 <= u <= 96 else 0
+    # UNI's target (pushing the UNI encoder): 0 B (the default), 1 BOTH (A moves down by the
+    # offset and B up, so an octave setting stays in key), 2 A. B follows A's note before it.
+    tgt = clamp(p.get("UTGT", 0), 3)
+    off = uoct + udet
+    inc_a = inc_of(cents_a + (off if tgt == 2 else -off if tgt == 1 else 0))
     note = cents_a if link in (0, 1) else 0
-    inc_b = inc_of(note + (p["BPCH"] - 64) * 100 + uoct + udet)
+    inc_b = inc_of(note + (p["BPCH"] - 64) * 100 + (off if tgt in (0, 1) else 0))
     mute_a, mute_b = inc_a < MININC, inc_b < MININC
     fm = p["FM"]
     d = FMLIN[fm] if law == 0 else min(0x7fffff, (inc_a * 2 * fm) // 127) if law == 1 else 0

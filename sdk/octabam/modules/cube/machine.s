@@ -11,7 +11,8 @@
         .global cube_setup_row, cube_chooser_row, cube_setup_open, cube_chooser_open
         .global cube_setup_edit6, cube_setup_draw6, cube_resolve_pb, cube_validate
         .global cube_stock_validate, cube_tick_hook, cube_pool_open
-        .global cube_pagesel_hook, cube_knob_hook
+        .global cube_pagesel_hook, cube_knob_hook, cube_letter, cube_lfo_pmtr
+        .global cube_rows_main, cube_rows_setup, cube_rows_draw
 
         .equ    CUBE_ROW, 5
         .equ    FLEX, 1
@@ -276,9 +277,9 @@ cube_pagesel_hook:
         movea.l 8(%sp),%a1              | displaced
         jmp     (0x40055728).l
 
-| 0x40055030 in the knob routine 0x40055008(slot, ticks), right after
-| TURING's own detour returns there (0x4005502a: a3 = the page's
-| descriptor, d5 = slot, a4 = ticks, d2 = slot * 4): OSC B's descriptor
+| 0x40055030 in the knob routine 0x40055008(slot, ticks), after it
+| resolves (a3 = the page's descriptor, d5 = slot, a4 = ticks,
+| d2 = slot * 4): OSC B's descriptor
 | takes the knob and the routine returns through its epilogue (0x400554d4),
 | so no playback byte is stored, sent or marked edited.
 cube_knob_hook:
@@ -292,6 +293,72 @@ cube_knob_hook:
 1:      move.l  %d2,-(%sp)              | displaced
         move.l  398(%a3),-(%sp)         | displaced
         jmp     (0x40055036).l
+
+| 0x40040132 in the track strip's drawer (audio tracks): `pea font` and
+| `move.l -24(%fp,type*4),-(%sp)`, the strip glyph for the track's machine
+| type (d4 = the track, a4 = its type). A CUBE track gets CUBE's glyph, a
+| lowercase c (cube.c cube_glyph); every other track its stock glyph.
+cube_letter:
+        lea     -16(%sp),%sp
+        movem.l %d0-%d1/%a0-%a1,(%sp)
+        move.l  %d4,-(%sp)
+        jsr     cube_strip_track
+        addq.l  #4,%sp
+        tst.l   %d0
+        movem.l (%sp),%d0-%d1/%a0-%a1   | movem and lea keep the flags
+        lea     16(%sp),%sp
+        pea     (0x400bf10a).l
+        bne.s   1f
+        move.l  (-24,%fp,%a4.l*4),-(%sp)
+        jmp     (0x4004013c).l
+1:      pea     cube_glyph
+        jmp     (0x4004013c).l
+
+| 0x4003bff2 in the LFO SETUP page's PMTR formatter, SRC case: d0 = the
+| track's machine type, a0 = its type byte. A CUBE track reads CUBE's page
+| descriptor (table row 5, cube_ui_tick), so PMTR names CUBE's parameters.
+cube_lfo_pmtr:
+        bsr     cube_row_type
+        lea     (PB_TABLE).l,%a0
+        jmp     (0x4003c054).l
+
+| CUBE runs on DSP core 1 only (tracks 1-4): the machine lists of tracks
+| 5-8 keep stock's five rows. cube_rows (cube.c) is 6 on T1-T4, else 5.
+| 0x40079248 `pea 5.w; pea 6.w` (main chooser: count, visible rows):
+cube_rows_main:
+        subq.l  #4,%sp
+        lea     -16(%sp),%sp
+        movem.l %d0-%d1/%a0-%a1,(%sp)
+        jsr     cube_rows
+        move.l  %d0,16(%sp)
+        movem.l (%sp),%d0-%d1/%a0-%a1
+        lea     16(%sp),%sp
+        pea     0x6.w
+        jmp     (0x40079250).l
+| 0x400585fa `pea 5.w; pea 5.w` (SRC SETUP selector: count, visible rows):
+cube_rows_setup:
+        subq.l  #4,%sp
+        lea     -16(%sp),%sp
+        movem.l %d0-%d1/%a0-%a1,(%sp)
+        jsr     cube_rows
+        move.l  %d0,16(%sp)
+        movem.l (%sp),%d0-%d1/%a0-%a1
+        lea     16(%sp),%sp
+        pea     0x5.w
+        jmp     (0x40058602).l
+| 0x40078678 `moveq #4,d0; cmp.l d2,d0; blt.s` (the main chooser draws
+| row d2 only up to its last row): the last row is cube_rows - 1.
+cube_rows_draw:
+        lea     -12(%sp),%sp
+        movem.l %d1/%a0-%a1,(%sp)
+        jsr     cube_rows
+        movem.l (%sp),%d1/%a0-%a1
+        lea     12(%sp),%sp
+        subq.l  #1,%d0
+        cmp.l   %d2,%d0
+        blt.s   1f
+        jmp     (0x4007867e).l
+1:      jmp     (0x400786a2).l
 
 cube_name:
         .asciz  "CUBE"

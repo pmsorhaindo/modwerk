@@ -1,10 +1,9 @@
 ; ---------------------------------------------------------------------------
-; cube_engine -- CUBE's voice, one 16-frame block of one track. A dynload
-; SOURCE PACKAGE: assembled at two origins by cube_pkg.py (every word that
-; moves is a relocation), uploaded by the ColdFire into the top of the
-; loader's P arena with WRITE, published with BIND on id $1f, and called by
-; the resident seam stub (cube_seam.asm) with r4 = this track's record.
-; Word 0 is init (an rts: no FX slot ever names id $1f), word 1 is proc.
+; cube_engine -- CUBE's voice, one 16-frame block of one track, called by
+; the seam stub (cube_seam.asm) with r4 = this track's record. Static-stock:
+; assembled straight after the stub at core 1's free top (cube_voice.asm).
+; (CUBE1 sent the same code as a dynload package, cube_pkg.py; word 0 is
+; still an rts init and word 1 proc, which verify.py's engine gate uses.)
 ; Labels are ceNN, all one length (dsp_asm resolves labels by prefix).
 ;
 ; The record (16-bit halves; cube_model.record): w0 $cb01, w1 flags (bit 0
@@ -13,7 +12,7 @@
 ; gA gB mask, w16 chunk control (bits 0-1 target 1 A / 2 B, bit 2 commit,
 ; bits 4-7 chunk), w18..w33 sixteen int16 samples of that chunk.
 ;
-; Private X (both payloads; X:$2840..$393f, the range Analog BD's ledgers
+; Private X (core 1; X:$2840..$393f, the range Analog BD's ledgers
 ; mark free; diag/cube1/probe_stock_74.log: zero after boot and PLAY):
 ;   $2840 RING   pass A's per-sample constants, read modulo 5:
 ;                incA D gB gA mask (gA into y1 beside gB yB: dsp_asm

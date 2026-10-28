@@ -2,8 +2,8 @@
 """CUBE's gates (brief 5), one section per step.
 
     python3 modules/cube/verify.py dsp            step 1a: the engine alone (cube_host), no image
-    python3 modules/cube/verify.py port IMAGE     steps 0-4 under the ColdFire port (out/emu/ot_emu)
-    python3 modules/cube/verify.py all IMAGE
+    python3 modules/cube/verify.py port IMAGE ELF [STOCK]   verify_static.py's steps under the ColdFire port
+    python3 modules/cube/verify.py all IMAGE ELF [STOCK]
 
 dsp: cube_engine.asm, relocated as the ColdFire sends it, run block by block
 in tools/harness/cube_host on records made by cube_model (the ColdFire's
@@ -14,7 +14,8 @@ from garbage memory renders exactly what clean memory does; the per-sample
 loops are counted (cube_pkg.loops) against the design's 54; WAVs of the
 renders go to diag/cube1/audio/dsp_*.wav.
 
-port: see port_steps() -- each step prints PASS/FAIL lines like the Turing gate.
+port: verify_static.py (the static-stock build: tracks 1-4, every stock effect
+kept), one PASS/FAIL line per check.
 Exit 0 when everything ran passes.
 """
 import array
@@ -100,9 +101,10 @@ def model(recs, trigs):
 
 
 def seam_bin(org=0x1000):
-    """The resident stub, its continuation the host's sentinel and its null
-    proc a word the engine never is: the whole CUBE source as it runs."""
-    src = cube_pkg.SEAM.read_text().replace("CONTADDR", "$f00").replace("NULLPROC", "$1")
+    """The static-stock voice (cube_voice.asm: the seam stub, then the engine
+    it calls), its continuation the host's sentinel: the whole CUBE source as
+    it runs at core 1's free top."""
+    src = (HERE / "cube_voice.asm").read_text().replace("CONTADDR", "$f00")
     words, _ = cube_pkg.assemble(src, org, "seam")
     path = OUT / "seam.bin"
     path.write_bytes(b"".join(bytes((w & 255, (w >> 8) & 255, w >> 16)) for w in words))
@@ -272,8 +274,8 @@ def main():
     if what in ("dsp", "all"):
         step_dsp()
     if what in ("port", "all"):
-        import verify_port
-        verify_port.main(pathlib.Path(sys.argv[2]).resolve(), check, failures)
+        r = subprocess.run([sys.executable, str(HERE / "verify_static.py"), "all", *sys.argv[2:]])
+        check("verify_static.py all", r.returncode == 0)
     print(f"\n{len(failures)} failed" + (": " + "; ".join(failures) if failures else " -- all checks passed"))
     sys.exit(1 if failures else 0)
 

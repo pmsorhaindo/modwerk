@@ -1,19 +1,21 @@
 """CUBE: a wavetable source machine for audio tracks. Two oscillators over an
 original 8 x 8 x 8 cube of 256-sample, 16-bit single cycles (modules/cube/
 generate_cube.py), X/Y/Z morph, thru-zero FM from B into A, unison, TONE
-quantisation, trig and hard sync. SRC: PTCH X Y Z FM MIX; SETUP (FUNC+SRC):
-FINE OCT UNI TONE MORPH SYNC; OSC B (a double tap of SRC from SETUP): BX BY
-BZ LINK LAW BPCH. The SRC key's double tap walks SRC -> SETUP -> OSC B ->
-SRC on CUBE tracks only.
+quantisation, trig and hard sync. SRC page: PTCH FM MIX / X Y Z; a press of
+SRC on it shows OSC B: BPCH LAW LINK / BX BY BZ; a double press of SRC (or
+FUNC+SRC) opens SETUP: FINE OCT UNI / TONE MORPH SYNC. Pushing the UNI
+encoder in SETUP cycles which oscillator unison detunes: A, B or BOTH.
 
-The voice is a dynload SOURCE PACKAGE (cube_engine.asm): the ColdFire
-uploads it into the top of the loader's P arena, one image per core that
-has a CUBE track, while the sequencer is stopped, and binds it on id $1f
-(platform/dsp-dynload-transport/manager.c, source packages: a base change).
-A resident seam stub (cube_seam.asm) runs it for a CUBE track's record, or
-renders silence until it is bound. The registration is Analog BD's measured
-chooser/Part seams (machine row 5; the two cannot share an image).
-Emulator-qualified only (diag/CLAUDE_REPORT5.md); not on hardware.
+Tracks 1-4 only. Static-stock (OCTABAM_STATIC_STOCK=1, upstream's default),
+no DSP loader, and every stock effect kept: the voice (cube_voice.asm = the
+seam stub cube_seam.asm + the engine cube_engine.asm) lives in DSP core 1's
+free program memory above its stock records (payload B, P:0x1d9f.., 459 of
+609 words; schema.DspSection.free_top), entered from Analog BD's track source
+seam. Core 0 (tracks 5-8) has 33 free words, so T5-T8 do not offer CUBE: their
+machine lists keep stock's five rows, and a CUBE signature there (a pasted
+track, a CUBE1 Part) is put back to FLEX. The registration is Analog BD's
+measured chooser/Part seams (machine row 5; the two cannot share an image).
+Emulator-qualified only; not on hardware in this form.
 """
 import pathlib
 import sys
@@ -27,37 +29,27 @@ ROOT = HERE.parents[1]
 
 
 def data_include(_modules):
-    """remix.inc for cube_data.s: the engine package and the cube."""
+    """remix.inc for cube_data.s: the cube."""
     sys.path.insert(0, str(HERE))
-    import cube_pkg
     import generate_cube
     blob = ROOT / "out/cube/cube.bin"
     fresh = generate_cube.to_bin(generate_cube.cube())
     if not blob.exists() or blob.read_bytes() != fresh:
         blob.parent.mkdir(parents=True, exist_ok=True)
         blob.write_bytes(fresh)
-    pkg = cube_pkg.package()
-    w = pkg["words"]
-    lines = ["        .section .rodata", "        .balign 4",
-             "        .global cube_pkg_words, cube_pkg_reloc, cube_pkg_count, cube_pkg_nreloc",
-             "        .global cube_pkg_init, cube_pkg_proc, cube_waves",
-             f"cube_pkg_count: .long {len(w)}", f"cube_pkg_nreloc: .long {len(pkg['relocations'])}",
-             f"cube_pkg_init: .long {pkg['init']}", f"cube_pkg_proc: .long {pkg['proc']}",
-             "cube_pkg_words:"]
-    lines += ["        .long " + ",".join(f"0x{v:06x}" for v in w[i:i + 8]) for i in range(0, len(w), 8)]
-    lines += ["cube_pkg_reloc:", "        .word " + ",".join(str(r) for r in pkg["relocations"]),
-              "        .balign 4", "cube_waves:", f'        .incbin "{blob}"']
-    return "\n".join(lines) + "\n"
+    return "\n".join(["        .section .rodata", "        .balign 4", "        .global cube_waves",
+                      "cube_waves:", f'        .incbin "{blob}"']) + "\n"
 
 
-SEAM = stock_dsp_words("A", 0x39C, 2, "e5789bc296dc4459ae42db3801b86bffe42ef74675547fd17f51cdc90e476315")
+SEAM = stock_dsp_words("B", 0x1A2, 2, "e5789bc296dc4459ae42db3801b86bffe42ef74675547fd17f51cdc90e476315")
 
 MODULE = Module(
     name="cube", key="CUBE", kind=Kind.HYBRID, category=Category.MACHINES,
     author="pmsorhaindo", author_url="https://github.com/pmsorhaindo",
     doc="CUBE wavetable machine: two oscillators over an original 8x8x8 cube; "
-        "SRC PTCH X Y Z FM MIX, SETUP FINE OCT UNI TONE MORPH SYNC, OSC B BX BY BZ LINK LAW BPCH "
-        "(double tap SRC: SRC -> SETUP -> OSC B). The voice loads per core through dynload.",
+        "SRC PTCH FM MIX / X Y Z, OSC B (SRC again) BPCH LAW LINK / BX BY BZ, "
+        "SETUP (double press SRC) FINE OCT UNI / TONE MORPH SYNC. Tracks 1-4; static-stock, "
+        "no DSP loader, every stock effect kept.",
     proof=Proof.PORT, proof_note="emulator only (modules/cube/verify.py); not on hardware",
     linked=(
         Linked("cubemachine", "modules/cube/machine.s", dram=True),
@@ -84,7 +76,7 @@ MODULE = Module(
         Detour(0x400585DC, stock_guard(0x400585dc, 10, "22fb6e2bea4520003d2fae7035c0cd57bcd6fe6f2cfdd5b70580a3f6f2a68034"),
                "cubemachine", "cube_setup_open", "SRC SETUP opens on CUBE for the CUBE track", pad_to=10),
         Detour(0x4005221E, stock_guard(0x4005221e, 10, "8f0fa4f7d6db857f695996b185b38b788fa6af0eacd86d7dd01e2ff61201ffed"),
-               "cubemachine", "cube_tick_hook", "publish CUBE's page descriptor; ask for the engine while stopped",
+               "cubemachine", "cube_tick_hook", "publish CUBE's page descriptor; the UNI encoder push",
                pad_to=10),
         Detour(0x40078886, stock_guard(0x40078886, 10, "fe6cb52458c7d968dc467c1cd7721d832baf6bc2fac1826c8c10ed07fee2e7f8"),
                "cubemachine", "cube_chooser_open", "the track's machine list opens on CUBE for the CUBE track", pad_to=10),
@@ -106,29 +98,33 @@ MODULE = Module(
                pad_to=8),
         Detour(0x40055720, stock_guard(0x40055720, 8, "684371b3fd401a481c6051f2075ec73a1351144cbe1ba6b70b98b035693709c1"),
                "cubemachine", "cube_pagesel_hook",
-               "page select: on a CUBE track the SRC double tap walks SRC -> SETUP -> OSC B -> SRC", pad_to=8),
+               "page select: on a CUBE track a press of SRC on SRC shows OSC B and back; a double press opens SETUP", pad_to=8),
         Detour(0x40055030, stock_guard(0x40055030, 6, "055a629c6dc5b238b5301bf40e8fabd0719384e779c1fa6936c406e2b58546b4"),
                "cubemachine", "cube_knob_hook",
-               "knob routine after its resolve (and after TURING's own detour): OSC B's knobs edit its Part bytes"),
+               "knob routine after its resolve: OSC B's knobs edit its Part bytes"),
+        Detour(0x40040132, stock_guard(0x40040132, 10, "9a04d3b319401c726c5664118a6d9d252162d1264acbb06031ae92406761b622"),
+               "cubemachine", "cube_letter", "track strip: a CUBE track's machine letter is c, not FLEX's F", pad_to=10),
+        Detour(0x4003BFF2, stock_guard(0x4003bff2, 6, "6d3a05238393510d126d994050dab31053b5a64c8adddd87d51c20a00b9984c2"),
+               "cubemachine", "cube_lfo_pmtr", "LFO SETUP PMTR names a CUBE track's own SRC parameters"),
+        Detour(0x40079248, stock_guard(0x40079248, 8, "3ec3e33dc9eae9cfbe075a2a5e2697563293203896e3649ae7e7a718a6d7f34c"),
+               "cubemachine", "cube_rows_main", "machine chooser: six rows (CUBE last) on T1-T4, stock's five on T5-T8",
+               pad_to=8),
+        Detour(0x400585FA, stock_guard(0x400585fa, 8, "28992093b4deda97ffa595ce8acd14c8a2a391c67871c1e8dd3421d97467a29d"),
+               "cubemachine", "cube_rows_setup", "SRC SETUP selector: six rows on T1-T4, five on T5-T8", pad_to=8),
+        Detour(0x40078678, stock_guard(0x40078678, 6, "c29a846c95212b4710bfddec551a50d6cf923af6a648a2f2f2af6398cc98e5a5"),
+               "cubemachine", "cube_rows_draw", "machine chooser draws CUBE's row on T1-T4 only"),
     ),
     pokes=(
-        Poke(0x40079248, stock_guard(0x40079248, 4, "8fbd3190028fe564c11b56e3e73e8eaf36925cbabf94164176eeb4c4f57bc6ac"), H("48780006"),
-             "machine chooser has six rows, CUBE the last"),
-        Poke(0x400585FA, stock_guard(0x400585fa, 4, "8fbd3190028fe564c11b56e3e73e8eaf36925cbabf94164176eeb4c4f57bc6ac"), H("48780006"),
-             "SRC SETUP selector has six rows"),
         Poke(0x4003C950, stock_guard(0x4003c950, 2, "74d01dadcbe6a57ef61bc53a5a65404cd8446c6738ff0ac86b1b1a78d8ae7d41"), H("7205"),
              "SRC SETUP name lookup admits CUBE"),
-        Poke(0x40078678, stock_guard(0x40078678, 2, "04cd1c6d463ba6752ff68f9125991b1c4af983ae355b62366122ba2d47eee3b2"), H("7005"),
-             "machine chooser draws CUBE"),
         Poke(0x400786CE, stock_guard(0x400786ce, 2, "04cd1c6d463ba6752ff68f9125991b1c4af983ae355b62366122ba2d47eee3b2"), H("7005"),
              "machine chooser highlights CUBE"),
         Poke(0x40079904, stock_guard(0x40079904, 2, "577d7ba37f9786ab02a7dc9eeb612bb55936018179b550b14f4b9f000a89bf20"), H("7605"),
              "machine chooser persists CUBE"),
     ),
-    dsp=DspSection(asm="modules/cube/cube_seam.asm", priority=5, payloads=frozenset({"A", "B"}),
-                   hooks=(DspHook({"A": 0x39C, "B": 0x1A2}, SEAM, "cs01",
-                                  "track source seam: a CUBE record runs the loaded engine (or silence)"),),
-                   subst={"A": {"CONTADDR": "$426", "NULLPROC": "$7c9"},
-                          "B": {"CONTADDR": "$221", "NULLPROC": "$589"}}),
+    dsp=DspSection(asm="modules/cube/cube_voice.asm", priority=5, payloads=frozenset({"B"}), free_top=True,
+                   hooks=(DspHook({"B": 0x1A2}, SEAM, "cs01",
+                                  "track source seam (core 1, T1-T4): a CUBE record runs the built-in engine"),),
+                   subst={"B": {"CONTADDR": "$221"}}),
     gates=(Gate("modules/cube/verify.py", remix_arg=False),),
 )
