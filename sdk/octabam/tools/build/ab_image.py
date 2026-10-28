@@ -70,7 +70,7 @@ TABLES808 = 0x3200
 VOICES808 = 0x3600
 X_TOP = 0x3940                  # the lower of the two ledgers' free tops
 # Pre-boot destination and staging buffers for each DSP upload.
-PRE = {"A": (0x40B00000, 0x40B80000), "B": (0x40B40000, 0x40BC0000)}
+PRE = ab_records.PREBOOT
 
 
 def die(msg):

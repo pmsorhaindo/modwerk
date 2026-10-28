@@ -5,6 +5,9 @@ UNCACHED = 0x08000000
 PAYLOAD_A = (0x400e2324, 79563)
 PAYLOAD_B = (0x400f59ef, 77061)
 B_POINTER = 0x40001ed4
+# Pre-boot destination and staging buffers for each DSP upload (Analog BD,
+# and build_bus.py's free-top sections; the two never share an image).
+PREBOOT = {"A": (0x40B00000, 0x40B80000), "B": (0x40B40000, 0x40BC0000)}
 
 def die(message):
     sys.exit(f"ab-records: {message}")
