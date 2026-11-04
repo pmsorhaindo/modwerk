@@ -32,6 +32,10 @@ is module 0.
   any other loads beside the live ones, and one with no image, hooks or
   sites removes that module. `build.py` takes the first four bytes of the
   SHA-256 of the module's name (the elemod's id, or the output file's stem).
+  A C package that subscribes to events also takes its title, the name the
+  unit's inventory shows, from that stem (15 characters); `--name` applies
+  to DSP and octabam packages only, so a C package's title and id change
+  together.
 
 - Hooks, in this order: `module_tick`, `module_draw`, `module_key`,
   `module_enc`. Later hooks append. A base refuses a package with more hooks
@@ -158,7 +162,9 @@ than four hook words. `build.py` writes them from a module's `runtime.json`
 (`{"schema": 1, "subscribe": [{"event", "fn", "order", "replaces"}]}`; `replaces` names the
 detour its native octabam build keeps at that site, and its units assemble with
 `MODWERK_EVENTS`), from an elemod's `subscribe`, or from `--subscribe HOOK:FN:ORDER` for C
-sources. `contribute` is refused.
+sources. A raised event (no site, such as `ev_trig_muted`) comes from `runtime.json`'s `raise` or, for C
+sources, `--raise EVENT` (a `raise` list in the module's package row): the module defines its zero word
+`raise_EVENT` in initialized data, and the loader points it at the base's entry. `contribute` is refused.
 
 The loader keeps one row per hook: every live module's handler, by (order, module id), then 0.
 A switch that changes a row builds it under the stable lock and writes it masked with the
@@ -167,6 +173,22 @@ so no task resumes part way through a row. Removal and rollback rebuild the rows
 set, so they come back exactly and install order never matters. A site or stock copy on a
 hook's bytes is refused as `RUNTIME_EVENT`; `modwerk_runtime_refused_event()` gives the hook's
 index. MWCP feature 128 says the base has site hooks.
+
+For Octatrack `ot_machine_starts`, the linked C/assembly builder also verifies the
+record's callback while ELF metadata is still available. Its pointer word must
+relocate to the entry of a sized `STT_FUNC` wholly inside `.text`, before merged
+read-only/writable data. C provides this metadata; assembly callbacks must use
+`.type name,@function` and `.size name,.-name`. A plain symbol map, a data address
+or an address inside a function is refused. The package ABI and START record
+remain unchanged. This is a build correctness check: installation receives a flat
+image without ELF section/type information and retains its initialized-image
+bounds check. It does not prove that authored code is safe to execute.
+
+Reviewed reconstruction recipes also pin this builder's source. After a builder
+change, retain existing recipe spans only if their original `imageSha256` and
+the byte-for-byte package rebuild still pass. Refresh just the changed source
+binding in that case; a changed image needs recapture and review. Frozen historical
+recipes keep their original bindings.
 
 ## Base features and DSP claims (ABI 9)
 

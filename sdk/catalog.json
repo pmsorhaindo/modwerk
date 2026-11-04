@@ -69,7 +69,7 @@
     },
     {
       "id": "analog-bassdrum",
-      "version": "0.1.5-experimental",
+      "version": "0.1.6-experimental",
       "addedAt": "2026-10-01T09:19:37Z"
     },
     {
@@ -109,7 +109,7 @@
     },
     {
       "id": "vector",
-      "version": "0.2.4-experimental",
+      "version": "0.2.5-experimental",
       "addedAt": "2026-10-06T08:02:00Z"
     },
     {
@@ -129,7 +129,7 @@
     },
     {
       "id": "poly8",
-      "version": "0.3.1-experimental",
+      "version": "0.3.2-experimental",
       "addedAt": "2026-10-08T12:00:00Z"
     },
     {
@@ -161,6 +161,11 @@
       "id": "arp-key-locks",
       "version": "0.1.0-experimental",
       "addedAt": "2026-10-26T12:00:00Z"
+    },
+    {
+      "id": "temp-save",
+      "version": "0.1.0-experimental",
+      "addedAt": "2026-10-28T12:00:00Z"
     },
     {
       "id": "beat-slicer",

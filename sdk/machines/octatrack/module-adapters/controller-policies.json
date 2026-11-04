@@ -2,7 +2,7 @@
  {
   "module": "sidechain-compressor",
   "moduleId": 2513434262,
-  "controllerSha256": "48104b9770742324df8d76c3f43031439ad986c0247843524b3a6c053d229e30",
+  "controllerSha256": "178d200073896dd2416f07bb952f835087f9250778e773fc9426a5165db259ce",
   "sourcePolicySha256": "96638989bbfb3b2f695d60eee84e6e3f9a6ada4099a0c9c889cbecf477f06b58",
   "revisions": [
    1,
@@ -21,7 +21,7 @@
  {
   "module": "output-matrix",
   "moduleId": 3404814517,
-  "controllerSha256": "4b653212a0f2189e8730ba5f3f3d4a23fa72219385e7fd42ccf8e0557f26f544",
+  "controllerSha256": "17e9afe714d2707147804360bbf4e614240d9d5afc037df5fec0d2a1fc56c3e1",
   "sourcePolicySha256": "0994f291fc10c4b89c827cf60802e30ba152bf49c6572027e9edc0a22524a232",
   "revisions": [
    1,
@@ -40,7 +40,7 @@
  {
   "module": "output-matrix",
   "moduleId": 3404814517,
-  "controllerSha256": "4b653212a0f2189e8730ba5f3f3d4a23fa72219385e7fd42ccf8e0557f26f544",
+  "controllerSha256": "17e9afe714d2707147804360bbf4e614240d9d5afc037df5fec0d2a1fc56c3e1",
   "sourcePolicySha256": "0994f291fc10c4b89c827cf60802e30ba152bf49c6572027e9edc0a22524a232",
   "revisions": [
    1,
@@ -59,7 +59,7 @@
  {
   "module": "output-matrix",
   "moduleId": 3404814517,
-  "controllerSha256": "4b653212a0f2189e8730ba5f3f3d4a23fa72219385e7fd42ccf8e0557f26f544",
+  "controllerSha256": "17e9afe714d2707147804360bbf4e614240d9d5afc037df5fec0d2a1fc56c3e1",
   "sourcePolicySha256": "0994f291fc10c4b89c827cf60802e30ba152bf49c6572027e9edc0a22524a232",
   "revisions": [
    1,
@@ -78,8 +78,8 @@
  {
   "module": "analog-bassdrum",
   "moduleId": 2883261509,
-  "controllerSha256": "9b536a81404546319ac520d05b39e0bfe508bad03453f2828ec421d046c64a70",
-  "sourcePolicySha256": "f337c21208c21b68334c40b942b85a47c67f59ac26c6f97786a337303e63412e",
+  "controllerSha256": "579b9b5e76b000a8b9c95f6131a547fbb5117f497d4bc3ee0f98385edc96e5a3",
+  "sourcePolicySha256": "600a5ef2601e6280c90aa19677fcbf05b7d5972f0ec53a310be447bbe0ff81c9",
   "revisions": [
    1,
    1,
@@ -88,10 +88,10 @@
   "feature": 4,
   "requiredCores": 3,
   "version": 1,
-  "imageBytes": 5956,
+  "imageBytes": 6268,
   "entryName": "ab_render",
-  "entry": 1162,
-  "beginReturn": 1322,
-  "endReturn": 1150
+  "entry": 1106,
+  "beginReturn": 1266,
+  "endReturn": 1094
  }
 ]
