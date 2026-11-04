@@ -317,8 +317,55 @@ namespace ot
 		return false;
 	}
 
+	// The transfer size of an ATTR SSIZE/DSIZE code (0 byte, 1 word, 2 long,
+	// 4 sixteen-byte burst); 0 for a reserved code, which is an error itself.
+	static uint32_t edmaSize(const uint32_t _code)
+	{
+		switch(_code)
+		{
+		case 0: return 1;
+		case 1: return 2;
+		case 2: return 4;
+		case 4: return 16;
+		default: return 0;
+		}
+	}
+
+	uint32_t Edma::configError(const uint32_t _ch) const
+	{
+		const auto attr = field(_ch, 4, 2);
+		const auto ss = edmaSize((attr >> 8) & 7), ds = edmaSize(attr & 7);
+		const auto saddr = field(_ch, 0, 4), daddr = field(_ch, 0x10, 4), nbytes = field(_ch, 8, 4);
+		const auto soff = static_cast<int32_t>(static_cast<int16_t>(field(_ch, 6, 2)));
+		const auto doff = static_cast<int32_t>(static_cast<int16_t>(field(_ch, 0x16, 2)));
+		uint32_t e = 0;
+		if(!ss || saddr % ss) e |= ERR_SAE;
+		if(!ss || soff % static_cast<int32_t>(ss ? ss : 1)) e |= ERR_SOE;
+		if(!ds || daddr % ds) e |= ERR_DAE;
+		if(!ds || doff % static_cast<int32_t>(ds ? ds : 1)) e |= ERR_DOE;
+		if(ss && ds && (nbytes % ss || nbytes % ds)) e |= ERR_NCE;
+		return e;
+	}
+
 	void Edma::start(const uint32_t _ch, const bool _paced)
 	{
+		static const bool s_check = [] { const char* e = std::getenv("OT_EDMA_CHECK"); return !(e && *e == '0'); }();
+		if(s_check)
+		{
+			if(const auto e = configError(_ch))
+			{
+				// Refused at activation: the chip moves nothing and never
+				// completes the channel (the error interrupt is EEI-gated and
+				// the firmware enables none).
+				if(m_configErrors++ < 8)
+					std::fprintf(stderr, "edma: channel %u configuration error %#x (SADDR %#x DADDR %#x ATTR %#x SOFF %d DOFF %d NBYTES %u): refused, as on the chip\n",
+						_ch & 15, e, field(_ch, 0, 4), field(_ch, 0x10, 4), field(_ch, 4, 2),
+						static_cast<int16_t>(field(_ch, 6, 2)), static_cast<int16_t>(field(_ch, 0x16, 2)), field(_ch, 8, 4));
+				m_lastError = ((_ch & 15) << 24) | e;
+				setCsr(_ch, static_cast<uint16_t>(csr(_ch) & ~(DONE | START)));
+				return;
+			}
+		}
 		if(m_onTransfer)
 			m_onTransfer(_ch, _paced);
 		if(m_onKick)

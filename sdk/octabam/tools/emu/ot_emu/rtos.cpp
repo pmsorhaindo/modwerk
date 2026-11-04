@@ -219,6 +219,8 @@ namespace ot
 			// mark, and the real-time DSP mode's fence opens on it.
 			const bool was = m_intc0.masked(1);
 			m_intc0.write(_addr - g_intc0, _size, _val);
+			if(m_machine.hwFramesStopped() && !m_intc0.masked(1))
+				m_intc0.write(0x1c, 1, 1);		// HARDWARE RULES (machine.h): the frames have stopped; source 1 never runs again
 			const bool now = m_intc0.masked(1);
 			if(was != now)
 			{

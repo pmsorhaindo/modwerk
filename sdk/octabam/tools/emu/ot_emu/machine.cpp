@@ -1,3 +1,4 @@
+#include <cstdlib>
 #include "machine.h"
 
 #include "v4e.h"
@@ -344,6 +345,28 @@ namespace ot
 		// A write the co-processor owns is not a boot write for the models to
 		// replay (with the DSPs attached the boot makes 164,829 host-port
 		// writes; the models' seed stays the 8,235 route A counts).
+		// HARDWARE RULES (machine.h). 0x46104d3e is stock's frame-transfer state
+		// (the eDMA ISR 0x40004840 dispatches on it; state 7 = 0x40004bc0).
+		static const bool s_hwRules = [] { const char* e = std::getenv("OT_HW_RULES"); return !(e && *e == '0'); }();
+		if(s_hwRules && m_coproc)
+		{
+			if(_addr == 0xfc0a400c && _size == 1)
+			{
+				const int sel = static_cast<int>(_val & 1);
+				if(sel == 1 && m_hwSel == 0 && read32(0x46104d3e) == 7)
+				{
+					if(m_hwCore1At7++ < 4)
+						std::fprintf(stderr, "hwrule: DSP select -> core 1 at frame-transfer state 7 (pc=%08x): the frames stop (MKII dsp2-AB2)\n", currentPc());
+					m_hwFramesStopped = true;
+				}
+				m_hwSel = sel;
+			}
+			// stock's frame ISR also commands core 0 while the state word still reads 7
+			// (it is reset only when the next frame starts): count non-stock PCs only
+			else if(_addr == 0x20000004 && _size == 2 && (_val & 0xff) == 0x89 && m_hwSel == 0 && read32(0x46104d3e) == 7
+				&& !(currentPc() >= 0x40000400 && currentPc() < 0x400e0000))
+				++m_hwCore0Pulls7;
+		}
 		if(m_coproc && m_coproc->write(_addr, _size, _val))
 			return;
 		if(m_periphWriteLogOn)

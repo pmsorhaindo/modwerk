@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="192" viewBox="0 0 320 192" role="img" aria-labelledby="title desc">
+ <title id="title">TURING MACHINE — a looping shift register writes notes</title>
+ <desc id="desc">Sixteen bits in a row; the last one loops back to the first through a flip point. Below, the stepped note line the bits produce. Original illustration, not an Octatrack LCD capture.</desc>
+ <rect width="320" height="192" rx="8" fill="#111218"/>
+ <g stroke="#fff" opacity=".035" stroke-width=".7"><path d="M20 97H300M20 122H300M20 147H300M92 85V160M159 85V160M226 85V160"/></g>
+  <rect x="25.0" y="46" width="13" height="13" rx="2" fill="#e9a23b"/>
+ <rect x="41.5" y="46" width="13" height="13" rx="2" fill="none" stroke="#e9a23b" stroke-width="1.4" opacity=".6"/>
+ <rect x="58.0" y="46" width="13" height="13" rx="2" fill="#e9a23b"/>
+ <rect x="74.5" y="46" width="13" height="13" rx="2" fill="#e9a23b"/>
+ <rect x="91.0" y="46" width="13" height="13" rx="2" fill="none" stroke="#e9a23b" stroke-width="1.4" opacity=".6"/>
+ <rect x="107.5" y="46" width="13" height="13" rx="2" fill="none" stroke="#e9a23b" stroke-width="1.4" opacity=".6"/>
+ <rect x="124.0" y="46" width="13" height="13" rx="2" fill="#e9a23b"/>
+ <rect x="140.5" y="46" width="13" height="13" rx="2" fill="none" stroke="#e9a23b" stroke-width="1.4" opacity=".6"/>
+ <rect x="157.0" y="46" width="13" height="13" rx="2" fill="#e9a23b"/>
+ <rect x="173.5" y="46" width="13" height="13" rx="2" fill="#e9a23b"/>
+ <rect x="190.0" y="46" width="13" height="13" rx="2" fill="#e9a23b"/>
+ <rect x="206.5" y="46" width="13" height="13" rx="2" fill="none" stroke="#e9a23b" stroke-width="1.4" opacity=".6"/>
+ <rect x="223.0" y="46" width="13" height="13" rx="2" fill="none" stroke="#e9a23b" stroke-width="1.4" opacity=".6"/>
+ <rect x="239.5" y="46" width="13" height="13" rx="2" fill="#e9a23b"/>
+ <rect x="256.0" y="46" width="13" height="13" rx="2" fill="none" stroke="#e9a23b" stroke-width="1.4" opacity=".6"/>
+ <rect x="272.5" y="46" width="13" height="13" rx="2" fill="#e9a23b"/>
+ <g fill="none" stroke="#e9a23b" stroke-width="1.6" opacity=".7"><path d="M285.5 52.5h8v-20H17 v20h6"/><path d="M20 49.5l3 3-3 3"/></g>
+ <circle cx="160" cy="32.5" r="5" fill="#111218" stroke="#e9a23b" stroke-width="1.6"/>
+ <path d="M157 32.5h6M160 29.5v6" stroke="#e9a23b" stroke-width="1.3" transform="rotate(45 160 32.5)"/>
+ <path d="M25.0 131.9H41.8V113.5H58.5V104.3H75.2V99.7H92.0V125.0H108.8V136.5H125.5V115.8H142.2V131.9H159.0V113.5H175.8V104.3H192.5V127.3H209.2V111.2H226.0V102.0H242.8V125.0H259.5V136.5H276.2V115.8H293.0" fill="none" stroke="#e9a23b" stroke-width="2.3"/>
+ <text x="25" y="22" font-family="Arial,sans-serif" font-size="10" fill="#c5c7da" letter-spacing="1.1">TURING MACHINE</text>
+ <text x="25" y="176" font-family="Arial,sans-serif" font-size="9" fill="#9b9fb5" letter-spacing=".4">LOCK 127 → THE PHRASE REPEATS</text>
+ <text x="238" y="176" font-family="Arial,sans-serif" font-size="9" fill="#e9a23b">2–16 STEPS</text>
+</svg>

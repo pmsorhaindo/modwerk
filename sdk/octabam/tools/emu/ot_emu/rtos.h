@@ -498,6 +498,7 @@ namespace ot
 		uint64_t frameCount() const { return m_frameCount; }
 		bool framePending() const { return m_framePending; }
 		const Intc& intc0() const { return m_intc0; }
+		Machine& machine() const { return m_machine; }
 		const Intc& intc1() const { return m_intc1; }
 		uint64_t edmaStarted() const { return m_edma.started(); }
 		Edma& edma() { return m_edma; }
