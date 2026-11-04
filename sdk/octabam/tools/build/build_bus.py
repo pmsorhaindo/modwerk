@@ -268,7 +268,12 @@ _DEF_ASM = {m.key: m.dsp.asm for m in _CLONED}
 # the payloads it names, with no dispatch entry. USB AUDIO IN's RX inject.
 STOCK_DSP = {m.key for m in _CLONED if m.menu.stock_dsp}
 HOOKED = [k for k in REMIX.modules
-          if _MODS[k].dsp is not None and _MODS[k].menu is None]
+          if _MODS[k].dsp is not None and _MODS[k].menu is None and not _MODS[k].dsp.free_top]
+# ...or placed ABOVE the stock P records in a pre-boot upload instead
+# (schema.DspSection.free_top, placed after every DSP pass): no harvested
+# words, so every stock effect stays.
+FREE_TOP = [k for k in REMIX.modules
+            if _MODS[k].dsp is not None and _MODS[k].menu is None and _MODS[k].dsp.free_top]
 for _k in HOOKED:
     _DEF_ASM[_k] = _MODS[_k].dsp.asm
 
@@ -3450,6 +3455,80 @@ hostquit:
     # match the identity the recipe pins for exactly this (single-runtime)
     # composition; a remix that combines the runtime with other modules
     # cannot match it, and says so instead of failing.
+    # FREE-TOP sections (schema.DspSection.free_top): each goes in its
+    # payload's program memory above every stock P record, as one more P
+    # record of that payload's upload, booted as a pre-boot payload of
+    # octabam's loader with the DSP boot's upload pointer moved to it --
+    # Analog BD's route below, with no stock word touched but the hook's
+    # two. Like Analog BD it must see the final payloads, so it runs here.
+    if FREE_TOP:
+        import ab_records
+        from remix import platform_build, runtime_build
+        if "ANALOG BD" in REMIX.modules:
+            sys.exit(f"{', '.join(FREE_TOP)} and ANALOG BD both replace a DSP upload; "
+                     f"they cannot share an image")
+        if DYNAMIC or _platform_at is None:
+            sys.exit(f"{', '.join(FREE_TOP)}: a free-top section needs the static-stock "
+                     f"build and a DRAM unit (octabam's loader boots its upload)")
+        _ft_pay = {"A": (ab_records.PAYLOAD_A, 0x40001E8E), "B": (ab_records.PAYLOAD_B, ab_records.B_POINTER)}
+        _ft_pre, _ft_done = [], set()
+        print("\n=== DSP: free-top sections, above the stock P records ===")
+        for _k in FREE_TOP:
+            _d = _MODS[_k].dsp
+            (_tag,) = _d.payloads
+            if _tag in _ft_done:
+                sys.exit(f"{_k}: payload {_tag} already carries a free-top section")
+            _ft_done.add(_tag)
+            (_va, _ln), _ptr = _ft_pay[_tag]
+            _recs, _term = ab_records.records(img, _va, _ln)
+            _org = max(a + c for sp, a, c, _o in _recs if sp == 0 and a < 0x2000)
+            _src = _d.source_for(_tag, pathlib.Path(_d.asm).read_text())
+            _words, _syms = assemble_syms(_src, _org, _k)
+            if _org + len(_words) > 0x2000:
+                sys.exit(f"{_k}: {len(_words)} words at P:0x{_org:05x} pass the 8K wall "
+                         f"(payload {_tag} has {0x2000 - _org} free above its stock records)")
+            _log = []
+            for _h in _d.hooks:
+                _site = _h.site_on(_tag)
+                if _h.label not in _syms:
+                    sys.exit(f"{_k}: hook label {_h.label!r} is not in its source")
+                ab_records.patch(img, _recs, 0, _site, tuple(_h.stock), (0x0BF080, _syms[_h.label]),
+                                 f"{_k} {_h.label}: {_h.note}", _log)
+            _p0 = _va - BASE
+            _raw = bytes(img[_p0:_term]) + ab_records.ot_record(0, _org, _words) + \
+                bytes(img[_term:_p0 + _ln])
+            _packed = runtime_build.PACKED_MAGIC + len(_raw).to_bytes(4, "big") + \
+                runtime_build.pack(_raw, platform_build.MAX_CANDIDATES)
+            _dst, _stage = ab_records.PREBOOT[_tag]
+            if len(_raw) > 0x40000 or 4 + len(_packed) > 0x40000:
+                sys.exit(f"{_k}: payload {_tag}'s upload ({len(_raw):,} B) outgrows its scratch")
+            _ft_pre.append(dict(name=f"{_k.lower()} payload {_tag}", blob=platform_build.SIGNATURE + _packed,
+                                stage=_stage + ab_records.UNCACHED, dst=_dst + ab_records.UNCACHED,
+                                rawlen=len(_raw), rhash=platform_build.roll(_raw)))
+            _pexp = _va.to_bytes(4, "big")
+            _got = bytes(img[_ptr - BASE:_ptr - BASE + 4])
+            if _got != _pexp:
+                sys.exit(f"{_k}: 0x{_ptr:08x} holds {_got.hex()}, not payload {_tag}'s stock pointer")
+            img[_ptr - BASE:_ptr - BASE + 4] = (_dst + ab_records.UNCACHED).to_bytes(4, "big")
+            for _l in _log:
+                print(_l)
+            print(f"  {_k:13} P:0x{_org:05x}..0x{_org + len(_words):05x} ({len(_words):4} words)  "
+                  f"payload {_tag} free top, FREE {0x2000 - _org - len(_words)}; no stock word "
+                  f"but the hook's; upload {len(_raw):,} B packed {len(_packed):,} B (pre-boot)")
+            print(f"    poke 0x{_ptr:08x}: {_pexp.hex()} -> {_dst + ab_records.UNCACHED:08x}  "
+                  f"DSP boot: payload {_tag}'s upload reads the pre-boot copy")
+        _pappend, _psyms2, _boot, _pnames = platform_build.build(
+            [(_m.key, _u) for _m, _u in _dram], _payloads, pathlib.Path("out/platform"),
+            reserve=_reserve, defsyms=_pdefs, unit_defs=_unit_defs,
+            regions=[(r.symbol, r.size, r.align) for k in REMIX.modules for r in remix_modules()[k].dram_regions],
+            preboot=_ft_pre,
+            includes={_u.label: _u.include({_k: remix_modules()[_k] for _k in REMIX.modules})
+                      for _m, _u in _dram if _u.include is not None})
+        if _psyms2 != _psyms:
+            sys.exit("free top: the platform runtime linked differently the second time")
+        _appends[_platform_at] = (
+            "octabam loader + payloads (" + ", ".join(_pnames) + ")", _pappend)
+
     # Analog BD replaces the source renderer on both cores. Its uploads
     # must see the final DSP payloads, before they are packed for boot.
     if "ANALOG BD" in REMIX.modules:

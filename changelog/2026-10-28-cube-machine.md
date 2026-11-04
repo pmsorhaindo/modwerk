@@ -1,0 +1,1 @@
+The Octatrack builder can place a hooks-only DSP section in a core's unused program memory above the stock code (`DspSection(free_top=True)`), so a module's DSP engine no longer has to take a stock effect's code. CUBE, a two-oscillator wavetable machine for tracks 1-4, uses it and keeps all thirteen stock effects, SPRING REV included. Other builds are byte-identical.

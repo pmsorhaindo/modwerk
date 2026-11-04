@@ -1,0 +1,387 @@
+; ---------------------------------------------------------------------------
+; cube_engine -- CUBE's voice, one 16-frame block of one track, called by
+; the seam stub (cube_seam.asm) with r4 = this track's record. Static-stock:
+; assembled straight after the stub at core 1's free top (cube_voice.asm).
+; (CUBE1 sent the same code as a dynload package, cube_pkg.py; word 0 is
+; still an rts init and word 1 proc, which verify.py's engine gate uses.)
+; Labels are ceNN, all one length (dsp_asm resolves labels by prefix).
+;
+; The record (16-bit halves; cube_model.record): w0 $cb01, w1 flags (bit 0
+; trig, bit 1 B has its own cycle, bits 2-3 SYNC 0 free / 1 trig / 2 hard),
+; w2 $1e1e, w3 epoch, w4..w15 six 24-bit values as (hi16, lo8): incA incB D
+; gA gB mask, w16 chunk control (bits 0-1 target 1 A / 2 B, bit 2 commit,
+; bits 4-7 chunk), w18..w33 sixteen int16 samples of that chunk.
+;
+; Private X (core 1; X:$2840..$393f, the range Analog BD's ledgers
+; mark free; diag/cube1/probe_stock_74.log: zero after boot and PLAY):
+;   $2840 RING   pass A's per-sample constants, read modulo 5:
+;                incA D gB gA mask (gA into y1 beside gB yB: dsp_asm
+;                drops the R half of a bare X:R move, caught by the decode)
+;   $2848 INCB   $2849 STP (state)  $284a BUFA  $284b BUFB  $284c FLAGS
+;   $284d VBP (the voice's buffers)  $284e TRIG (the split offset)
+;   $2850 YB     B's samples of the segment (A's FM source, the mix)
+;   $2860 IB     B's index per sample, IB+0 the one before (SYNC HARD)
+;   $2900 + v*$400   A0 A1 B0 B1, 256 words each, int16 << 8 (full scale),
+;                    double-buffered: a chunk writes the back, commit flips
+;   $3900 + v*$10    state: epoch pA pB frontA frontB lastIdx
+; v = x:$418 / $20, the track within this core (Analog BD's voice index).
+;
+; Phase: 24 bits in r6 (lua (r6)+n6 is a modular add), offset by $800000.
+; `move r6,a / asr #16,a,a` leaves the signed top byte in a1 (the index,
+; -128..127; the cycle pointer sits at the cycle's centre with m = $ff) and
+; the low 16 bits << 8 in a0 (the unsigned frac). Linear interpolation:
+; h = (s1 - s0) / 2 in the accumulator (exact, then asr), y = s0 + h * frac
+; with macsu (frac unsigned; stock carries macsu x0,y0,a). FM: A's increment
+; per sample is incA + D * yB, D from the ColdFire (LIN: the knob; EXP:
+; 2 incA FM/127, so B scales A's own increment; OFF: 0). Mix: gB yB + gA yA
+; (gA + gB < 1), then the TONE mask on b1, which keeps the sign bit, stored
+; as b1 (no limiter, no A2 staleness). cube_pkg.py disassembles every word.
+;
+; Record words carry junk above bit 15: every test of one is logical
+; (and/eor set Z and N from a1 only), never a 56-bit cmp.
+;
+; Clobbers everything; leaves m0..m7 linear and n7 = $10. The stock code
+; after the source reloads r0 r1 r6 r7 n7 and a itself (A P:$426..).
+; ---------------------------------------------------------------------------
+
+ce00:
+        rts                             ; init: never dispatched
+ce01:
+        move    #>$ffffff,m0
+        move    #>$ffffff,m1
+        move    #>$ffffff,m2
+        move    #>$ffffff,m3
+        move    #>$ffffff,m4
+        move    #>$ffffff,m5
+        move    #>$ffffff,m6
+        move    #>$ffffff,m7
+; ---- this voice: state, buffers --------------------------------------------
+        move    x:>$418,a               ; 0 / $20 / $40 / $60
+        asr     a
+        move    #>$3900,x0
+        add     x0,a
+        move    a1,r5                   ; state
+        move    a1,x:>$2849
+        move    x:>$418,a
+        asl     #5,a,a
+        move    #>$2900,x0
+        add     x0,a
+        move    a1,x:>$284d             ; this voice's buffers
+; ---- epoch: a new one clears the buffers and the phases --------------------
+        move    x:(r4+$3),a
+        and     #>$ffff,a
+        move    a1,x1                   ; the epoch, clean
+        move    x:(r5),x0
+        eor     x0,a                    ; Z from a1: a2 still holds the word's
+        beq     ce02                    ; top byte (AGENTS.md: stale A2)
+        move    x1,x:(r5)
+        clr     a
+        move    x:>$284d,r0
+        move    #>$400,y0
+        do      y0,ce03
+        move    a,x:(r0)+
+ce03:
+        lua     (r5+$3),r0
+        move    a,x:(r0)+               ; frontA
+        move    a,x:(r0)+               ; frontB
+        move    #>$ffff80,x0
+        move    x0,x:(r0)               ; lastIdx = -128
+        move    #>$800000,x0
+        lua     (r5+$1),r0
+        move    x0,x:(r0)+              ; pA
+        move    x0,x:(r0)               ; pB
+ce02:
+; ---- the six 24-bit controls -----------------------------------------------
+        lua     (r4+$4),r1
+        move    x:(r1)+,a
+        and     #>$ffff,a
+        asl     #8,a,a
+        move    a1,x0
+        move    x:(r1)+,a
+        and     #>$ff,a
+        or      x0,a
+        move    a1,x:>$2840             ; incA
+        move    x:(r1)+,a
+        and     #>$ffff,a
+        asl     #8,a,a
+        move    a1,x0
+        move    x:(r1)+,a
+        and     #>$ff,a
+        or      x0,a
+        move    a1,x:>$2848             ; incB
+        move    x:(r1)+,a
+        and     #>$ffff,a
+        asl     #8,a,a
+        move    a1,x0
+        move    x:(r1)+,a
+        and     #>$ff,a
+        or      x0,a
+        move    a1,x:>$2841             ; D
+        move    x:(r1)+,a
+        and     #>$ffff,a
+        asl     #8,a,a
+        move    a1,x0
+        move    x:(r1)+,a
+        and     #>$ff,a
+        or      x0,a
+        move    a1,x:>$2843             ; gA
+        move    x:(r1)+,a
+        and     #>$ffff,a
+        asl     #8,a,a
+        move    a1,x0
+        move    x:(r1)+,a
+        and     #>$ff,a
+        or      x0,a
+        move    a1,x:>$2842             ; gB
+        move    x:(r1)+,a
+        and     #>$ffff,a
+        asl     #8,a,a
+        move    a1,x0
+        move    x:(r1)+,a
+        and     #>$ff,a
+        or      x0,a
+        move    a1,x:>$2844             ; mask
+        move    x:(r4+$1),a
+        and     #>$ffff,a
+        move    a1,x:>$284c             ; flags
+; ---- a chunk of a cycle into the back buffer; commit flips it --------------
+        move    x:(r4+$10),a
+        move    #>$3,x0
+        and     x0,a                    ; target: 0 none, 1 A, 2 B
+        beq     ce04
+        move    a1,x1
+        move    #>$2,x0
+        add     x0,a
+        move    a1,n5                   ; 3 / 4: that cycle's front word
+        move    x:(r5+n5),a
+        move    #>$1,x0
+        eor     x0,a                    ; the back: 0 / 1
+        move    a1,y1
+        asl     #8,a,a                  ; back * $100
+        move    a1,y0
+        move    x1,a
+        move    #>$1,x0
+        sub     x0,a                    ; 0 A / 1 B
+        asl     #9,a,a                  ; * $200
+        add     y0,a
+        move    x:>$284d,x0
+        add     x0,a
+        move    a1,y0                   ; the back buffer
+        move    x:(r4+$10),a
+        lsr     #4,a
+        move    #>$f,x0
+        and     x0,a                    ; chunk 0..15
+        asl     #4,a,a
+        add     y0,a
+        move    a1,r0
+        lua     (r4+$12),r1
+        do      #<$10,ce05
+        move    x:(r1)+,a
+        asl     #8,a,a
+        move    a1,x:(r0)+
+ce05:
+        move    x:(r4+$10),a
+        move    #>$4,x0
+        and     x0,a
+        beq     ce04
+        move    y1,x:(r5+n5)            ; commit: the back is the front
+ce04:
+; ---- the cycles this block plays ---------------------------------------------
+        move    x:>$284d,b
+        move    x:(r5+$3),a             ; frontA
+        tst     a
+        move    #>$80,x0
+        beq     ce06
+        move    #>$180,x0
+ce06:
+        add     x0,b
+        move    b1,x:>$284a             ; A's centre
+        move    x:>$284c,a
+        move    #>$2,x0
+        and     x0,a
+        beq     ce07                    ; LINK BOTH / PITCH: B plays A's cycle
+        move    x:>$284d,b
+        move    x:(r5+$4),a             ; frontB
+        tst     a
+        move    #>$280,x0
+        beq     ce08
+        move    #>$380,x0
+ce08:
+        add     x0,b
+ce07:
+        move    b1,x:>$284b             ; B's centre
+; ---- SYNC TRIG / HARD: a trig in this block splits it at its offset --------
+        move    #$0,r0                  ; the source block, 16 frames L,R
+        move    x:>$284c,a
+        move    #>$c,x0
+        and     x0,a
+        beq     ce09                    ; FREE
+        move    x:>$284c,a
+        move    #>$1,x0
+        and     x0,a
+        beq     ce09                    ; no trig this block
+        move    x:>$20c,a               ; the trig's frame offset (stock)
+        tst     a
+        blt     ce09
+        move    #>$10,x0
+        cmp     x0,a
+        bge     ce09
+        move    a1,x:>$284e
+        tst     a
+        beq     ce10                    ; on frame 0: no first segment
+        move    a1,n7
+        bsr     ce20                    ; frames before the trig
+ce10:
+        move    x:>$2849,r5
+        move    #>$800000,x0
+        lua     (r5+$1),r1
+        move    x0,x:(r1)+              ; A and B restart at the trig
+        move    x0,x:(r1)
+        move    x:>$284e,x0
+        move    #>$10,a
+        sub     x0,a
+        move    a1,n7
+        bsr     ce20                    ; the trig's frame and after
+        bra     ce11
+ce09:
+        move    #>$10,n7
+        bsr     ce20
+ce11:
+        move    #>$ffffff,m2
+        move    #>$ffffff,m3
+        move    #>$ffffff,m4
+        move    #>$10,n7
+        rts
+
+; ---- one segment: n7 frames (> 0) into x:(r0)+ -------------------------------
+ce20:
+        move    x:>$2849,r5
+        move    #>$ff,m2
+        move    #>$ff,m3
+; pass B: B's samples into YB
+        lua     (r5+$2),r1
+        move    x:(r1),r6               ; pB
+        move    x:>$2848,n6             ; incB
+        move    x:>$284b,r2             ; B's centre
+        move    #>$2850,r1
+        move    x:>$284c,a
+        move    #>$8,x0
+        and     x0,a
+        bne     ce21
+        do      n7,ce22
+        move    (r6)+n6                 ; the phase: an in-place AGU add, 1 cycle (lua is 3)
+        move    r6,a
+        asr     #$10,a,a
+        move    a1,n2
+        move    a0,y0
+        lua     (r2)+n2,r3
+        move    x:(r3)+,x1
+        move    x:(r3),a
+        sub     x1,a
+        asr     a
+        tfr     x1,a    a,x0
+        macsu   x0,y0,a
+        move    a,x:(r1)+
+ce22:
+        bra     ce23
+ce21:
+        move    x:(r5+$5),x0            ; B's index before this segment
+        move    x0,x:>$2860
+        move    #>$2861,r7
+        do      n7,ce24
+        move    (r6)+n6                 ; the phase: an in-place AGU add, 1 cycle (lua is 3)
+        move    r6,a
+        asr     #$10,a,a
+        move    a1,n2
+        move    a1,x:(r7)+
+        move    a0,y0
+        lua     (r2)+n2,r3
+        move    x:(r3)+,x1
+        move    x:(r3),a
+        sub     x1,a
+        asr     a
+        tfr     x1,a    a,x0
+        macsu   x0,y0,a
+        move    a,x:(r1)+
+ce24:
+ce23:
+        lua     (r5+$2),r1
+        move    r6,x:(r1)               ; pB
+; pass A: A's samples, FM from B, the mix, TONE, L and R
+        lua     (r5+$1),r1
+        move    x:(r1),r6               ; pA
+        move    x:>$284a,r2             ; A's centre
+        move    #>$2850,r1
+        move    #>$2840,r4
+        move    #>$4,m4
+        move    x:>$284c,a
+        move    #>$8,x0
+        and     x0,a
+        bne     ce25
+        do      n7,ce26
+        move    x:(r1)+,x0              ; yB
+        move    x:(r4)+,b               ; incA
+        move    x:(r4)+,y0              ; D
+        mac     y0,x0,b   x:(r4)+,y0    ; incA + D yB; gB
+        move    b1,n6
+        mpy     y0,x0,b   x:(r4)+,y1    ; gB yB; gA
+        move    (r6)+n6                 ; the phase: an in-place AGU add, 1 cycle (lua is 3)
+        move    r6,a
+        asr     #$10,a,a
+        move    a1,n2
+        move    a0,y0
+        lua     (r2)+n2,r3
+        move    x:(r3)+,x1
+        move    x:(r3),a
+        sub     x1,a
+        asr     a
+        tfr     x1,a    a,x0
+        macsu   x0,y0,a                 ; yA
+        move    a,x1
+        mac     y1,x1,b   x:(r4)+,y0    ; + gA yA; mask
+        and     y0,b
+        move    b1,x:(r0)+
+        move    b1,x:(r0)+
+ce26:
+        bra     ce27
+ce25:
+        move    #>$2860,r5
+        move    #>$800000,r7
+        do      n7,ce28
+        move    x:(r1)+,x0              ; yB
+        move    x:(r4)+,b               ; incA
+        move    x:(r4)+,y0              ; D
+        mac     y0,x0,b   x:(r4)+,y0    ; incA + D yB; gB
+        move    b1,n6
+        mpy     y0,x0,b   x:(r4)+,y1    ; gB yB; gA
+        move    (r6)+n6                 ; the phase: an in-place AGU add, 1 cycle (lua is 3)
+        move    x:(r5)+,x0              ; B's index a sample ago
+        move    x:(r5),a                ; and now
+        cmp     x0,a
+        tlt     r7,r6                   ; B wrapped: A restarts
+        move    r6,a
+        asr     #$10,a,a
+        move    a1,n2
+        move    a0,y0
+        lua     (r2)+n2,r3
+        move    x:(r3)+,x1
+        move    x:(r3),a
+        sub     x1,a
+        asr     a
+        tfr     x1,a    a,x0
+        macsu   x0,y0,a                 ; yA
+        move    a,x1
+        mac     y1,x1,b   x:(r4)+,y0    ; + gA yA; mask
+        and     y0,b
+        move    b1,x:(r0)+
+        move    b1,x:(r0)+
+ce28:
+        move    x:(r5),x0
+        move    x:>$2849,r5
+        move    x0,x:(r5+$5)            ; B's last index
+ce27:
+        move    x:>$2849,r5
+        lua     (r5+$1),r1
+        move    r6,x:(r1)               ; pA
+        move    #>$ffffff,m4
+        rts
