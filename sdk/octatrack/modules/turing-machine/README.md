@@ -62,6 +62,10 @@ WRITE preserves the step's other locks, clears conditions/microtiming/retrigs an
 unchanged. It marks its NOTE centre in spare lock bytes 30–31, as before. Muting silences output while the register
 continues following the track. New trigs, note-offs, channels, clock and transport remain stock's responsibility.
 
+## MIDI messages and timing
+
+Turing consumes no incoming MIDI messages and assigns no CCs or SysEx commands. Notes, controllers, pitch bend, program changes, SysEx, clock and transport continue through stock handling. Generated notes use the track's stock channel and routing, NOTE centre, VEL and LEN; each enabled track schedules at most one note per step, or a rest. Stock handles note-offs, overlap, mute and STOP, with no separate clock or output queue. Timing and load on a unit remain unmeasured. Use only one incoming clock port during testing.
+
 ## Compatibility and limitations
 
 Octatrack MKI/MKII, OS 1.40C. No hardware activity is authorized for this draft. Emulator results are not hardware
@@ -93,7 +97,7 @@ python3.11 -B sdk/octatrack/modules/turing-machine/generate.py --check
 npm run module:dev -- turing-machine --build-only --out /private/turing-machine.mwrm
 ```
 
-This command only builds. The private `.mwrm` can be selected through the browser's local-module installation flow on base 0.7.9, after exact-build hardware testing is authorized. Do not install this untested candidate on a unit as part of software verification.
+This command only builds. The private `.mwrm` uses the same package format and validator as the browser USB installer on base 0.7.9. It is not in the public catalogue: use the developer build/trial tools after exact-build hardware testing is authorized. Do not install this untested candidate on a unit as part of software verification.
 
 `runtime.json` contributes to `ot_midi_generators` and subscribes to `ev_midi_note_key` and `ev_modules_ready`. The base hosts the generator page and quantizer event. On installation after a project has already loaded, the existing modules-ready event reads only Turing comments from `project.work`; normal SAVE/RELOAD keeps the stock project-file callbacks. No module-owned battery range is used.
 

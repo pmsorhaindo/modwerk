@@ -9,7 +9,8 @@
     "github": "pmsorhaindo",
     "credits": [
       "pmsorhaindo",
-      "octabam: Sam Banks; additional source attribution in SDK THIRD_PARTY.md"
+      "octabam: Sam Banks; additional source attribution in SDK THIRD_PARTY.md",
+      "Shared scale SDK: Tim Hastie and Sam Banks (MIT), linked from the repository SDK."
     ]
   },
   "nativeManifest": "manifest.py",
@@ -121,14 +122,14 @@
     ]
   },
   "resources": {
-    "recorded": "Not measured",
+    "recorded": "2026-11-18",
     "storage": {
-      "label": "Storage",
-      "display": "Not measured",
-      "value": null,
-      "unit": "unknown",
-      "method": "unmeasured",
-      "conditions": "No measurements exist yet. Add exact conditions and source evidence when available.",
+      "label": "Runtime memory",
+      "display": "47.1 KiB",
+      "value": 48244,
+      "unit": "bytes",
+      "method": "static",
+      "conditions": "43,708 initialized image bytes plus 4,536 bytes BSS in the reproducible USB package; within the 128 KiB image and 288 KiB total per-module caps. Loader overhead and whole-set headroom are separate.",
       "source": "TESTING.md"
     },
     "processing": {
@@ -143,14 +144,14 @@
   },
   "tests": {
     "report": "TESTING.md",
-    "summary": "Hardware untested / #1697 draft. The evidenceRevision pins the imported reference; current port software results and its source commit are recorded in TESTING.md. No physical USB or reboot qualification.",
+    "summary": "Hardware untested / #1697 draft. Software observations on Modwerk base 0.7.9 and the exact USB package are recorded in TESTING.md. No physical USB or reboot qualification.",
     "hardwareStatus": "untested",
     "gates": [
       "verify_arpgen.py: engine, UI, storage and persistence in the emulator",
       "verify_beta.py: runtime admission, replacement, Undo and removal in the emulator",
       "test_port.py: fixed-seed reference engine equality and shared scale SDK compatibility"
     ],
-    "evidenceRevision": "3b134f57415923e2693801e660928a28c0e939bd"
+    "evidenceRevision": "22ebff77a6831e2c73b4cb7d80fe3b3956908822"
   },
   "license": {
     "spdx": "MIT",
