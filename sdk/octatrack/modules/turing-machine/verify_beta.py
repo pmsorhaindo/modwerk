@@ -22,7 +22,7 @@ def run(args):
     symbols = json.loads((args.base / 'symbols.json').read_text())
     v.ROOT, v.EMU = args.native.resolve(), args.emulator.resolve()
     v.elf_symbol = lambda name: symbols[name]
-    port = v.Port(args.base / 'MAIN.raw', args.output)
+    port = v.Port(args.base / 'MAIN.raw', args.output, extra=('--max','250000000'))
 
     def invoke(fn, *values):
         response = port.cmd('call ' + hex(fn) + ''.join(' ' + hex(x) for x in values))
@@ -77,6 +77,7 @@ def run(args):
         v.check('Beta note-key event applies own D major', len(notes)>=32
                 and all((n-2)%12 in (0,2,4,5,7,9,11) for _,n,_ in notes))
         saved = port.peek(part+0x1832,16)
+        port.press('SRC')  # close the generator page before replacing its owner
         upload(package,backend)
         v.check('Runtime backend Undo restores predecessor', invoke(backend[7],0) == 1)
         v.check('Undo keeps one intact module and Part settings',
