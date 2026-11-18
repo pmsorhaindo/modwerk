@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 2,
+  "id": "turing-machine",
+  "key": "TURING MACHINE",
+  "name": "Turing Machine",
+  "version": "0.5.0-experimental",
+  "category": "midi-usb",
+  "author": {
+    "github": "pmsorhaindo",
+    "credits": [
+      "pmsorhaindo",
+      "octabam: Sam Banks; additional source attribution in SDK THIRD_PARTY.md"
+    ]
+  },
+  "nativeManifest": "manifest.py",
+  "presentation": {
+    "label": "MIDI GENERATOR",
+    "family": "Sequencing",
+    "summary": "Looping shift registers write the notes of the Octatrack's MIDI tracks.",
+    "overview": "Live looping shift registers on MIDI tracks. Choose TURING in MIDI NOTE SETUP, then use AMP for MODE, LOCK, LEN, SCAL and DENS. FUNC+AMP opens SCALE and ROOT. Push encoder A to WRITE the phrase into ordinary trigs.",
+    "highlights": [
+      "MODE and the 64-bit phrase register stay per pattern and MIDI track.",
+      "LOCK, LEN, SCAL and DENS are shared by patterns using the same Part.",
+      "Own major/minor quantizer with twelve roots; SRC and the LFO stay stock.",
+      "Push encoder A to WRITE; the stock arpeggiator is replaced."
+    ],
+    "usage": [
+      "Select a MIDI track. Open FUNC+SRC, choose TURING with DOWN and YES, then close NOTE SETUP.",
+      "Press AMP and turn MODE on. B LOCK, C LEN, D SCAL and E DENS shape the phrase.",
+      "FUNC+AMP opens SCALE (A) and ROOT (B); release FUNC to edit; NO returns to the main page.",
+      "Push A to WRITE. MODE OFF plays the written trigs; choose OFF in NOTE SETUP to leave the generator."
+    ]
+  },
+  "controls": [
+    {
+      "name": "MODE",
+      "default": 0,
+      "count": 2,
+      "doc": "AMP A: per-pattern Turing playback switch; the Part must also choose TURING.",
+      "labels": [
+        "OFF",
+        "ON"
+      ]
+    },
+    {
+      "name": "LOCK",
+      "default": 64,
+      "count": 128,
+      "doc": "AMP B: per-Part flip chance, one value per encoder tick.",
+      "labels": null
+    },
+    {
+      "name": "LEN",
+      "default": 16,
+      "count": 63,
+      "doc": "AMP C: per-Part loop length, 2 to 64.",
+      "labels": null
+    },
+    {
+      "name": "SCAL",
+      "default": 64,
+      "count": 128,
+      "labels": null,
+      "doc": "AMP D: per-Part pitch range around stock NOTE, 0 to 48 semitones."
+    },
+    {
+      "name": "DENS",
+      "default": 64,
+      "count": 128,
+      "labels": null,
+      "doc": "AMP E: per-Part note density, 0 silent to 127 every step."
+    },
+    {
+      "name": "SCALE",
+      "default": 0,
+      "count": 3,
+      "labels": [
+        "OFF",
+        "MAJ",
+        "MIN"
+      ],
+      "doc": "FUNC+AMP A: per-Part quantizer, after TRAN; an out-of-key note snaps one semitone down. Release FUNC before editing."
+    },
+    {
+      "name": "ROOT",
+      "default": 0,
+      "count": 12,
+      "labels": [
+        "C",
+        "C#",
+        "D",
+        "D#",
+        "E",
+        "F",
+        "F#",
+        "G",
+        "G#",
+        "A",
+        "A#",
+        "B"
+      ],
+      "doc": "FUNC+AMP B: absolute per-Part root of the scale. Release FUNC before editing."
+    }
+  ],
+  "compatibility": {
+    "firmware": "1.40C",
+    "location": "MIDI tracks",
+    "conflicts": [],
+    "limitations": [
+      "Minimum supported Modwerk base: 0.7.9, on stock OS 1.40C. Hardware untested; private draft under #1697.",
+      "MODE/register anchors use DRAM plus saved-project comments. Unsaved changes are lost on power-cycle or reinstall.",
+      "LOCK/LEN/SCAL/DENS/SCALE/ROOT are per Part; patterns sharing a Part share those settings.",
+      "Release FUNC after FUNC+AMP before editing SCALE or ROOT. The former FUNC+LOCK snap shortcut is retired.",
+      "Replaces the arpeggiator. Existing Turing projects using arp MODE change; old FIRST is ignored.",
+      "Stock firmware can read saved projects, but the arp step mask and note offsets hold generator data.",
+      "SCALE remains OFF/MAJ/MIN with twelve roots, using the shared scale SDK and the historical down-one/drop rule."
+    ],
+    "effectId": null,
+    "uiClaims": [
+      "key:PUSHA@MIDI TURING"
+    ]
+  },
+  "resources": {
+    "recorded": "Not measured",
+    "storage": {
+      "label": "Storage",
+      "display": "Not measured",
+      "value": null,
+      "unit": "unknown",
+      "method": "unmeasured",
+      "conditions": "No measurements exist yet. Add exact conditions and source evidence when available.",
+      "source": "TESTING.md"
+    },
+    "processing": {
+      "label": "CPU / DSP load",
+      "display": "Not measured",
+      "value": null,
+      "unit": "unknown",
+      "method": "unmeasured",
+      "conditions": "No measurements exist yet. Add exact conditions and source evidence when available.",
+      "source": "TESTING.md"
+    }
+  },
+  "tests": {
+    "report": "TESTING.md",
+    "summary": "Hardware untested / #1697 draft. The evidenceRevision pins the imported reference; current port software results and its source commit are recorded in TESTING.md. No physical USB or reboot qualification.",
+    "hardwareStatus": "untested",
+    "gates": [
+      "verify_arpgen.py: engine, UI, storage and persistence in the emulator",
+      "verify_beta.py: runtime admission, replacement, Undo and removal in the emulator",
+      "test_port.py: fixed-seed reference engine equality and shared scale SDK compatibility"
+    ],
+    "evidenceRevision": "3b134f57415923e2693801e660928a28c0e939bd"
+  },
+  "license": {
+    "spdx": "MIT",
+    "file": "LICENSE",
+    "declaration": "Original module source by pmsorhaindo under the MIT licence in LICENSE, built with octabam by Sam Banks. No Elektron firmware, extracted routines or tables are included; stock bytes are referenced by address, length and SHA-256. Original OT LCD captures are declared in media/LICENSE.md as LicenseRef-OT-UI-Documentation; underlying Elektron rights remain reserved. Reviewer verification is required before publication and is not automatic legal clearance."
+  },
+  "media": [],
+  "access": {
+    "location": "MIDI NOTE SETUP: generator list; AMP: TURING; FUNC+AMP: SCALE/ROOT; encoder A push: WRITE.",
+    "steps": [
+      "Select a MIDI track. Open FUNC+SRC, choose TURING with DOWN and YES, then close NOTE SETUP.",
+      "Press AMP and turn MODE on. B LOCK, C LEN, D SCAL and E DENS shape the phrase.",
+      "FUNC+AMP opens SCALE (A) and ROOT (B); release FUNC to edit; NO returns to the main page.",
+      "Push A to WRITE. MODE OFF plays the written trigs; choose OFF in NOTE SETUP to leave the generator."
+    ],
+    "screenshots": []
+  }
+}

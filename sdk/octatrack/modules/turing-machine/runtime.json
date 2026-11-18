@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "contribute": [
+    {
+      "to": "ot_midi_generators",
+      "order": 30,
+      "data": "tm_generator"
+    }
+  ],
+  "subscribe": [
+    {
+      "event": "ev_midi_note_key",
+      "fn": "tm_take_note_key",
+      "order": 30,
+      "replaces": "tm_note_key_entry"
+    },
+    {
+      "event": "ev_modules_ready",
+      "fn": "tm_modules_ready",
+      "order": 50
+    }
+  ]
+}

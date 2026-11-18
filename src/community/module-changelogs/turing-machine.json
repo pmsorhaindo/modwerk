@@ -1,0 +1,11 @@
+[
+  {
+    "version": "0.5.0-experimental",
+    "date": "2026-11-18",
+    "changes": [
+      "Ports Turing to a USB MIDI generator module for Modwerk base 0.7.9.",
+      "Release FUNC before editing SCALE and ROOT; FUNC plus LOCK snapping is retired.",
+      "Known issue: hardware and physical USB installation remain untested."
+    ]
+  }
+]
