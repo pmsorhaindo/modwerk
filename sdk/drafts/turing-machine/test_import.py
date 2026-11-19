@@ -31,20 +31,22 @@ class Importer(unittest.TestCase):
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-static unsigned tm_install_read_done, tm_project_loading, tm_ready_events;
+static unsigned tm_install_read_done, tm_project_loading, tm_ready_events, tm_load_generation;
 static const char *content; static unsigned position, partial_success, opened, closed, begins, matches;
-static unsigned fail_directory, fail_open;
+static unsigned fail_directory, fail_open, fail_read, changed_project;
 static const char wanted[]="#TURING_B16_P16_T8=1,127,16,64,127,1,2,3,4";
 static uintptr_t test_directory(int a,int b) { (void)a;(void)b;return fail_directory?0:(uintptr_t)"/SET/PROJECT"; }
 static int test_open(void *f,const char *path,const char *mode,void *io,unsigned n) {
  (void)f;(void)io;if(strcmp(path,"/SET/PROJECT/project.work")||strcmp(mode,"r")||n!=4096)exit(2);++opened;return fail_open?-1:0;
 }
 static int test_read(void *f,void *dst,unsigned n) {
- (void)f;unsigned left=(unsigned)strlen(content)-position, take=left<n?left:n;
+ (void)f;if(changed_project){++tm_load_generation;return 0;}if(fail_read)return -1;unsigned left=(unsigned)strlen(content)-position, take=left<n?left:n;
  memcpy(dst,content+position,take);position+=take;return take==n||(partial_success&&take)?1:0;
 }
 static int test_close(void *f) { (void)f;++closed;return 0; }
-static void tm_project_begin(void) { ++begins; }
+static unsigned tm_project_begin(void) { ++begins;tm_project_loading=1;return ++tm_load_generation; }
+static uint16_t tm_task_lock(void) { return 0; }
+static void tm_task_unlock(uint16_t sr) { (void)sr; }
 static void tm_project_line(const char *line,int parse) { if(parse)exit(3);if(!strcmp(line,wanted))++matches; }
 static void tm_project_loaded(int result) { tm_project_loading=0;tm_install_read_done=result>=0; }
 '''
@@ -63,15 +65,21 @@ int main(void) {
   ++checks;
  }
  /* Failed lookup/open leaves the importer eligible for the next real event. */
- for(unsigned failure=0;failure<2;++failure) {
+ for(unsigned failure=0;failure<3;++failure) {
   content=wanted;position=0;opened=closed=begins=matches=0;
   tm_install_read_done=tm_project_loading=0;
-  fail_directory=failure==0;fail_open=failure==1;
+  fail_directory=failure==0;fail_open=failure==1;fail_read=failure==2;
   tm_modules_ready();
-  if(tm_install_read_done||begins) return 5;
-  fail_directory=fail_open=0;tm_modules_ready();
-  if(!tm_install_read_done||matches!=1||closed!=1) return 6;
+  if(tm_install_read_done||(failure<2&&begins)) return 5;
+  fail_directory=fail_open=fail_read=0;tm_modules_ready();
+  if(!tm_install_read_done||matches!=1||closed!=(failure==2?2u:1u)) return 6;
  }
+ /* A different project taking over the read cannot receive stale text or completion. */
+ content=wanted;position=0;opened=closed=begins=matches=0;
+ tm_install_read_done=tm_project_loading=0;changed_project=1;
+ tm_modules_ready();
+ if(matches||tm_install_read_done||!tm_project_loading||closed!=1) return 7;
+ changed_project=0;
  puts("Importer: 3072 chunk/partial-read/final-newline cases, once per install");
  return checks==3072?0:1;
 }

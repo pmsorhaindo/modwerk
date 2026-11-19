@@ -350,7 +350,8 @@ static volatile unsigned tm_migration_ready;
 static volatile unsigned tm_project_loading;
 static volatile unsigned tm_load_generation;
 /* Exclude task switches only; sequencer/audio interrupts remain enabled.
- * Never hold this over file I/O or the full migration/reset loops. */
+ * Protect reset or one migration batch, never file I/O. Higher-priority
+ * sequencer, USB, audio and DMA interrupts remain enabled. */
 static uint16_t tm_task_lock(void) {
     uint16_t sr;
     __asm__ volatile("move.w %%sr,%0" : "=d"(sr) :: "memory");
@@ -1230,22 +1231,27 @@ static void tm_project_reset(void) {
 /* A storing load spans project text AND bank restoration. Its completion
  * detour runs just before the base's own project-end hook; UI ticks during
  * the load must never migrate a half-loaded project. */
-void tm_project_begin(void) {
+unsigned tm_project_begin(void) {
     uint16_t sr = tm_task_lock();
     tm_project_loading = 1;
     tm_migration_ready = 0;
-    ++tm_load_generation;
-    tm_task_unlock(sr);
+    unsigned generation = ++tm_load_generation;
     tm_project_reset();
+    tm_task_unlock(sr);
+    return generation;
 }
 void tm_project_defaults(void) {
+    uint16_t sr = tm_task_lock();
     unsigned loading = tm_project_loading;
     tm_project_begin();
     tm_project_loading = loading; /* stock defaults can run inside a load */
+    tm_task_unlock(sr);
 }
 void tm_project_loaded(int result) {
+    uint16_t sr = tm_task_lock();
     tm_project_loading = 0; /* a failed load must not latch Turing inert */
     tm_install_read_done = result >= 0;
+    tm_task_unlock(sr);
 }
 
 /* The decimal at *p (at most five digits), advancing past it; -1 when there
@@ -1487,7 +1493,7 @@ unsigned tm_modules_ready(void) {
         (file,path,"r",io,sizeof(io));
     if (opened < 0)
         return 0;
-    tm_project_begin();
+    unsigned generation = tm_project_begin();
     static char block[512], line[160];
     unsigned used = 0, overflow = 0;
     int more;
@@ -1495,12 +1501,16 @@ unsigned tm_modules_ready(void) {
         for (unsigned i = 0; i < sizeof(block); ++i)
             block[i] = 0;
         more = ((int (*)(void *,void *,unsigned))0x40016564u)(file,block,sizeof(block));
+        if (generation != tm_load_generation) break;
         for (unsigned i = 0; i < sizeof(block) && block[i]; ++i) {
             char c = block[i];
             if (c == '\r' || c == '\n') {
                 line[used] = 0;
-                if (!overflow && used)
-                    tm_project_line(line,0);
+                if (!overflow && used) {
+                    uint16_t sr = tm_task_lock();
+                    if (generation == tm_load_generation) tm_project_line(line,0);
+                    tm_task_unlock(sr);
+                }
                 used = overflow = 0;
             } else if (used + 1u < sizeof(line)) {
                 line[used++] = c;
@@ -1508,12 +1518,16 @@ unsigned tm_modules_ready(void) {
                 overflow = 1;
             }
         }
-    } while (more == 1);
+    } while (more == 1 && generation == tm_load_generation);
     if (!overflow && used) {
         line[used] = 0;
-        tm_project_line(line,0);
+        uint16_t sr = tm_task_lock();
+        if (generation == tm_load_generation) tm_project_line(line,0);
+        tm_task_unlock(sr);
     }
     ((int (*)(void *))0x4001677cu)(file);
-    tm_project_loaded(more < 0 ? -1 : 0);
+    uint16_t sr = tm_task_lock();
+    if (generation == tm_load_generation) tm_project_loaded(more < 0 ? -1 : 0);
+    tm_task_unlock(sr);
     return 0;
 }
