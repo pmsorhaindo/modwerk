@@ -50,12 +50,17 @@ def choose(port):
 def open_turing(port):
     v.dismiss_windows(port)
     choose(port)
+    # A direct-backend saved-card boot can retain the stock page's input
+    # layer. Re-enter through real SRC/AMP keys so the unmodified host owns
+    # the page before a fixture turns any encoder.
+    port.press('SRC')
     v.page_key(port)
     # NO on the first page forwards to stock. Avoid injecting an unrelated
     # key event into a wire capture; use NO only to leave page two.
     second = int.from_bytes(port.peek(v.elf_symbol('mg_second'),4),'big')
     if second:
         port.press('NO')
+    assert port.peek(v.elf_symbol('tm_ui'),1)==b'\x01', 'Turing page did not acquire its input layer'
 
 
 def page_tracks(port, tracks):

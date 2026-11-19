@@ -661,6 +661,7 @@ def setup_tracks(port, tracks):
         port.press(track)
         port.press("FUNC", "SRC")
         port.run(300)
+        port.enc("A", -127)                 # channel OFF, including a cached project's old channel
         for _ in range(channel):
             port.enc("A", 4)
         port.press("YES")
@@ -2334,14 +2335,33 @@ def reload_run(image, work):
     sys.path.insert(0, str(ROOT / "tools/emu"))
     import emu_card
     work.mkdir()
-    port = Port(image, work / "a", writable=True)
+    cached = os.environ.get('TM_RELOAD_TREE')
+    options = {}
+    if cached:
+        tree = pathlib.Path(cached).resolve()
+        works = [f for f in tree.rglob('*') if f.name.lower()=='project.work']
+        if len(works)!=1:raise ValueError('TM_RELOAD_TREE must contain one saved project')
+        home=works[0].parent
+        options=dict(tree=tree,extra=('--mount','--set',home.parent.name,'--project',home.name))
+    port = Port(image, work / "a", writable=True, **options)
     keys = {}
     try:
         port.run(1000)
         port.press("NO")
-        new_project(port)
+        if not cached:
+            new_project(port)
         midi_mode(port)
-        setup_tracks(port, (("T1", 1, ()), ("T2", 2, range(1, 17))))
+        wanted = (("T1",1,()),("T2",2,range(1,17)))
+        if cached:
+            if current_pattern(port)!=(0,0):port.press('PATTERN','TRIG1')
+            assert current_pattern(port)==(0,0), 'Reload fixture must use A01'
+            # Restore the same empty T1/full-grid T2 fixture through the panel;
+            # old written trigs must not silently toggle the new grid off.
+            wanted=tuple((name,ch,tuple(i+1 for i in range(16)
+                         if bool(track_data(port,t)[0] & (1<<i)) != (i+1 in positions)))
+                         for t,(name,ch,positions) in enumerate(wanted))
+        setup_tracks(port, wanted)
+        assert track_data(port,0)[0]&65535==0 and track_data(port,1)[0]&65535==65535, 'Reload grid fixture is not empty/full'
         port.press("T1")
         page_tracks(port, {1: (True, 127, 16, 64, 64)})
         watch_midi_out(port)
