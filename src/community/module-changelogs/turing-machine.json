@@ -5,7 +5,8 @@
     "changes": [
       "Ports Turing to a USB MIDI generator module for Modwerk base 0.7.9.",
       "Release FUNC before editing SCALE and ROOT; FUNC plus LOCK snapping is retired.",
-      "Known issue: hardware and physical USB installation remain untested."
+      "Known issue: hardware and physical USB installation remain untested.",
+      "Documentation/testing update: records local software verification results."
     ]
   }
 ]
