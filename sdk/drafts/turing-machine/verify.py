@@ -969,6 +969,14 @@ def dismiss_windows(port):
         covered = any(int.from_bytes(overlays[i+32:i+36],'big') & 0x20 for i in range(0,280,56))
         if not setup and not covered:
             return
+        if covered and not setup:
+            # NO on the main page itself posts DISARM ALL. Repeating NO
+            # keeps that transient popup alive instead of dismissing it.
+            # Let toasts expire before cancelling a persistent menu.
+            port.run(2000)
+            overlays = port.peek(0x46c7d34c,280)
+            if not any(int.from_bytes(overlays[i+32:i+36],'big') & 0x20 for i in range(0,280,56)):
+                continue
         port.press('NO')
     raise RuntimeError('Stock window still covers the requested page')
 
