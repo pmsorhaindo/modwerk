@@ -121,6 +121,17 @@ class Runtime(unittest.TestCase):
         self.assertEqual(self.uc.mem_read(BANK+0x48d0,16),self.uc.mem_read(0x1001614e+0x48d0,16))
         print('Linked WRITE instructions:',cost,'(16 steps; firmware cost not included)')
 
+    def test_legacy_write_centres_are_read_only_and_distinct_from_akl(self):
+        locks=BANK+0x4900
+        self.uc.mem_write(BANK+0x8e53,b'\x10')
+        for marker,centre in ((0x54,60),(0x57,48)):
+            self.uc.mem_write(self.symbols['tm_written_centres'],bytes(64))
+            self.uc.mem_write(locks,b'\x3c'+b'\xff'*29+bytes((marker,48)))
+            self.put(BANK+0x48d4,1)
+            self.call('tm_write_track',0)
+            self.assertEqual(self.uc.mem_read(locks+30,2),bytes((marker,48)))
+            self.assertEqual(self.uc.mem_read(self.symbols['tm_written_centres'],1)[0],centre+1)
+
     def test_owned_write_centres_round_trip_without_pattern_markers(self):
         values=bytes([49]*16+[0]*48)
         self.uc.mem_write(self.symbols['tm_written_centres'],values)

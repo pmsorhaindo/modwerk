@@ -677,6 +677,10 @@ static unsigned tm_centre(const volatile uint8_t *record, uint32_t track, uint32
     unsigned saved = tm_written_centres[(bank * TM_PATTERNS + pattern) * TM_TRACKS + track][step];
     if (saved)
         return saved - 1u;
+    /* Read-only compatibility with earlier Turing WRITE data. 'W' (87)
+     * is outside AKL's valid KEY range 0..84. Never create or clear it. */
+    if (record[30] == 0x57u && record[31] < 128u)
+        return record[31];
     return record[0] & 0x7fu;
 }
 
@@ -862,7 +866,7 @@ unsigned tm_write_track(unsigned track) {
             conds[step] = 0;
             continue;
         }
-        if (tm_written_centres[tm_index(c)][step]) {
+        if (tm_written_centres[tm_index(c)][step] || (r[30] == 0x57u && r[31] < 128u)) {
             r[0] = r[3] = r[4] = r[5] = TM_LOCK_NONE;
             tm_written_centres[tm_index(c)][step] = 0;
         }
