@@ -31,12 +31,13 @@ class Importer(unittest.TestCase):
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-static unsigned tm_install_read_done, tm_project_loading;
+static unsigned tm_install_read_done, tm_project_loading, tm_ready_events;
 static const char *content; static unsigned position, partial_success, opened, closed, begins, matches;
+static unsigned fail_directory, fail_open;
 static const char wanted[]="#TURING_B16_P16_T8=1,127,16,64,127,1,2,3,4";
-static uintptr_t test_directory(int a,int b) { (void)a;(void)b;return (uintptr_t)"/SET/PROJECT"; }
+static uintptr_t test_directory(int a,int b) { (void)a;(void)b;return fail_directory?0:(uintptr_t)"/SET/PROJECT"; }
 static int test_open(void *f,const char *path,const char *mode,void *io,unsigned n) {
- (void)f;(void)io;if(strcmp(path,"/SET/PROJECT/project.work")||strcmp(mode,"r")||n!=4096)exit(2);++opened;return 0;
+ (void)f;(void)io;if(strcmp(path,"/SET/PROJECT/project.work")||strcmp(mode,"r")||n!=4096)exit(2);++opened;return fail_open?-1:0;
 }
 static int test_read(void *f,void *dst,unsigned n) {
  (void)f;unsigned left=(unsigned)strlen(content)-position, take=left<n?left:n;
@@ -45,7 +46,7 @@ static int test_read(void *f,void *dst,unsigned n) {
 static int test_close(void *f) { (void)f;++closed;return 0; }
 static void tm_project_begin(void) { ++begins; }
 static void tm_project_line(const char *line,int parse) { if(parse)exit(3);if(!strcmp(line,wanted))++matches; }
-static void tm_project_loaded(int result) { if(result<0)exit(4); }
+static void tm_project_loaded(int result) { tm_project_loading=0;tm_install_read_done=result>=0; }
 '''
         suffix=r'''
 int main(void) {
@@ -60,6 +61,16 @@ int main(void) {
    fprintf(stderr,"pad %u policy %u opens %u closes %u begins %u matches %u\n",pad,policy,opened,closed,begins,matches);return 1;
   }
   ++checks;
+ }
+ /* Failed lookup/open leaves the importer eligible for the next real event. */
+ for(unsigned failure=0;failure<2;++failure) {
+  content=wanted;position=0;opened=closed=begins=matches=0;
+  tm_install_read_done=tm_project_loading=0;
+  fail_directory=failure==0;fail_open=failure==1;
+  tm_modules_ready();
+  if(tm_install_read_done||begins) return 5;
+  fail_directory=fail_open=0;tm_modules_ready();
+  if(!tm_install_read_done||matches!=1||closed!=1) return 6;
  }
  puts("Importer: 3072 chunk/partial-read/final-newline cases, once per install");
  return checks==3072?0:1;

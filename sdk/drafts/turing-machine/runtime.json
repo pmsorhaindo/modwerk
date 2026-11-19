@@ -11,7 +11,7 @@
     {
       "event": "ev_midi_note_key",
       "fn": "tm_take_note_key",
-      "order": 30,
+      "order": 20,
       "replaces": "tm_note_key_entry"
     },
     {

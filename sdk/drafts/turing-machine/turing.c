@@ -348,7 +348,27 @@ static void tm_set_config(volatile TmCell *c, const TmConfig *in) {
 #define TM_SRAM_PART 0x100a4eceu
 static volatile unsigned tm_migration_ready;
 static volatile unsigned tm_project_loading;
+static volatile unsigned tm_load_generation;
+/* Exclude task switches only; sequencer/audio interrupts remain enabled.
+ * Never hold this over file I/O or the full migration/reset loops. */
+static uint16_t tm_task_lock(void) {
+    uint16_t sr;
+    __asm__ volatile("move.w %%sr,%0" : "=d"(sr) :: "memory");
+    if ((sr & 0x700u) < 0x200u) {
+        uint16_t locked = (uint16_t)((sr & ~0x700u) | 0x200u);
+        __asm__ volatile("move.w %0,%%sr" :: "d"(locked) : "memory");
+    }
+    return sr;
+}
+static void tm_task_unlock(uint16_t sr) {
+    __asm__ volatile("move.w %0,%%sr" :: "d"(sr) : "memory");
+}
 static unsigned tm_install_read_done;
+volatile unsigned tm_ready_events;
+/* WRITE's centres are ours, never pattern lock bytes 30/31 (Arp Key Locks).
+ * Zero means absent; centre + 1 keeps MIDI note zero representable. */
+static uint8_t tm_written_centres[CELL_COUNT][TM_STEPS];
+static uint8_t tm_scheduled[TM_TRACKS];
 
 static volatile uint8_t *tm_part(unsigned bank, unsigned part) {
     return (volatile uint8_t *)(TM_SEQ_BANKS + bank * TM_SEQ_BANK_SIZE + TM_PART_BASE + part * TM_PART_SIZE);
@@ -410,6 +430,7 @@ static void tm_config(const volatile TmCell *c, TmConfig *out) {
 void tm_generator_tick(void) {
     if (tm_migration_ready || tm_project_loading)
         return;
+    unsigned generation = tm_load_generation;
     uint32_t ui_bank = WORD(TM_BANK_PTR);
     if (ui_bank < TM_SEQ_BANKS || ui_bank >= TM_SEQ_BANKS + TM_BANKS * TM_SEQ_BANK_SIZE)
         return;
@@ -419,12 +440,19 @@ void tm_generator_tick(void) {
         for (unsigned b = 0; b < TM_BANKS; ++b)
             for (unsigned q = 0; q < TM_PATTERNS; ++q)
                 for (unsigned t = 0; t < TM_TRACKS; ++t) {
+                    uint16_t sr = tm_task_lock();
+                    if (tm_project_loading || generation != tm_load_generation) {
+                        tm_task_unlock(sr);
+                        return;
+                    }
                     TmConfig k;
                     tm_legacy_config(tm_cell(b, q, t), &k);
                     unsigned p = tm_pattern_part(b, q);
                     volatile uint8_t *part = tm_part(b, p);
-                    if (!k.on || part[TM_MASK(t)] == 'M')
+                    if (!k.on || part[TM_MASK(t)] == 'M') {
+                        tm_task_unlock(sr);
                         continue;
+                    }
                     unsigned key = part[0x4e2u + 36u * t + 17u];
                     if (key > 24u)
                         key = 0;
@@ -432,12 +460,26 @@ void tm_generator_tick(void) {
                     tm_part_byte(b, p, TM_MASK(t), 'M');
                     tm_part_byte(b, p, TM_MASK(t) + 1u, TM_GEN_ID);
                     tm_part_byte(b, p, 0x3e2u + 32u * t + 14u, 0); /* preserve TRAN and KEY */
+                    tm_task_unlock(sr);
                 }
+        /* A new load may have started while this tick was preempted. */
+        uint16_t sr = tm_task_lock();
+        if (tm_project_loading || generation != tm_load_generation) {
+            tm_task_unlock(sr);
+            return;
+        }
         s.flags |= TM_FLAG_S2;
         s.flags &= ~TM_FLAG_FIRST;
         tm_write(&s);
+        tm_migration_ready = 1;
+        tm_task_unlock(sr);
+        ((void (*)(void))0x40027e00u)();
+        return;
     }
-    tm_migration_ready = 1;
+    uint16_t sr = tm_task_lock();
+    if (!tm_project_loading && generation == tm_load_generation)
+        tm_migration_ready = 1;
+    tm_task_unlock(sr);
 }
 static unsigned tm_ui_bank_index(void) {
     uint32_t bank = WORD(TM_BANK_PTR);
@@ -535,13 +577,16 @@ static void tm_keep(uint32_t track, const volatile TmCell *c, const TmState *s, 
     RANDOM[track] = s->rng;
 }
 
-/* The chord hook: a fired record's byte 30 and 31. Nonzero for a Turing step. */
-int32_t tm_fired(uint32_t track, uint32_t tag) {
+static unsigned tm_on(uint32_t bank, uint32_t pattern, uint32_t track);
+
+/* Chord ownership is module state, never another module's saved lock bytes. */
+int32_t tm_fired(uint32_t track) {
     if (tm_note_claims(track)) {
         BYTE(0x46c76dc0u + 0x44u * track + 14u) = 0;
         BYTE(0x46c76fe0u + 32u * track + 14u) = 0;
     }
-    return track < TM_TRACKS && (tag >> 8) == TM_TAG;
+    return track < TM_TRACKS && tm_scheduled[track] && tm_note_claims(track) &&
+           tm_on(BYTE(TM_UI_BANK), BYTE(TM_UI_PATTERN), track);
 }
 
 /* ---- REPLACE mode: one Turing step per step ---------------------------------
@@ -564,7 +609,7 @@ int32_t tm_fired(uint32_t track, uint32_t tag) {
  * with stock's locks and timing (its CC locks are sent, as a lock trig's).
  * The tick ISR applies the record as for any trig (VEL, LEN, CC locks; the
  * LFO adds to NOTE after it; the arpeggiator and its KEY take the note in
- * as a trig's), and bytes 30-31 carry TM_TAG and the step's number, so the
+ * as a trig's), and module-owned scheduling state tells the
  * chord hook drops NOT2..NOT4 and releases the step (tm_fired). A muted
  * step is scheduled the same: the register goes on and stock's note routine
  * sends nothing. The track's condition result is true on a note step and
@@ -624,11 +669,13 @@ static unsigned tm_part_note(uint32_t track, uint32_t bank, uint32_t pattern) {
 }
 
 /* A lock record's centre: its NOTE lock (WRITE's: the centre it was written from), else the Part's NOTE. */
-static unsigned tm_centre(const volatile uint8_t *record, uint32_t track, uint32_t bank, uint32_t pattern) {
+static unsigned tm_centre(const volatile uint8_t *record, uint32_t track, uint32_t bank, uint32_t pattern,
+                          unsigned step) {
     if (record[0] == TM_LOCK_NONE)
         return tm_part_note(track, bank, pattern);
-    if (record[30] == TM_WRITTEN && record[31] < 128u)
-        return record[31];
+    unsigned saved = tm_written_centres[(bank * TM_PATTERNS + pattern) * TM_TRACKS + track][step];
+    if (saved)
+        return saved - 1u;
     return record[0] & 0x7fu;
 }
 
@@ -638,25 +685,24 @@ static unsigned tm_centre(const volatile uint8_t *record, uint32_t track, uint32
  * the track's condition result is set (true for a note). Nonzero for a note
  * step. */
 static unsigned tm_turing_record(volatile uint8_t *record, const uint8_t *locks, unsigned stocked,
-                                 uint32_t track, uint32_t bank, uint32_t pattern, uint32_t step) {
+                                 uint32_t track, uint32_t bank, uint32_t pattern, uint32_t step,
+                                 const TmConfig *config) {
     if (locks)
         for (unsigned i = 0; i < 32u; ++i)
             record[i] = locks[i];
     else if (!stocked)
         for (unsigned i = 0; i < 32u; ++i)
             record[i] = TM_LOCK_NONE;
-    unsigned centre = tm_centre(record, track, bank, pattern);
+    unsigned centre = tm_centre(record, track, bank, pattern, step);
     volatile TmCell *c = tm_cell(bank, pattern, track);
-    TmConfig k;
-    tm_config(c, &k);
+    const TmConfig k = *config;
     unsigned salt = bank * TM_PATTERNS + pattern, steps = tm_steps(track, bank, pattern);
     TmState s;
     tm_position(track, c, k.length, step % steps, salt, &s);
     unsigned value = tm_step(&s, k.lock, k.length, track, salt);
     tm_keep(track, c, &s, (step + 1u) % steps);
     unsigned gate = tm_gate(value, k.density);
-    record[31] = (uint8_t)step;
-    record[30] = (uint8_t)TM_TAG;
+    tm_scheduled[track] = 1;
     if (gate)
         record[0] = (uint8_t)tm_turing_note(centre, value, k.scale);
     *(volatile uint8_t *)(TM_COND_RESULTS + TM_TRACKS + track) = gate ? 0u : 1u;
@@ -671,7 +717,9 @@ static unsigned tm_turing_record(volatile uint8_t *record, const uint8_t *locks,
 int32_t tm_eval(uint32_t track, uint32_t bank, uint32_t pattern, uint32_t step, int32_t slot) {
     if (track >= TM_TRACKS || step >= TM_STEPS || bank >= TM_BANKS || pattern >= TM_PATTERNS)
         return 0;
-    unsigned on = tm_on(bank, pattern, track);
+    TmConfig config;
+    tm_config(tm_cell(bank, pattern, track), &config);
+    unsigned on = config.on;
     if (slot < 0) {
         TmFirst *f = &tm_first_steps[track];
         volatile uint8_t *record = (volatile uint8_t *)(TM_EV_RECORD_FIRST + track * 32u);
@@ -693,13 +741,15 @@ int32_t tm_eval(uint32_t track, uint32_t bank, uint32_t pattern, uint32_t step, 
             *(volatile uint8_t *)(TM_COND_RESULTS + TM_TRACKS + track) = 0;
         return 1;
     }
-    if (!on)
+    if (!on) {
+        tm_scheduled[track] = 0;
         return 0;
+    }
     WORD(TM_EV_EVENT + 4u * track) = 0;
     tm_stock_eval(track, bank, pattern, step, slot);
     uint32_t stock = WORD(TM_EV_EVENT + 4u * track);
     if (tm_turing_record((volatile uint8_t *)(TM_EV_RECORDS + (uint32_t)slot * 256u + track * 32u), 0,
-                         stock != 0u, track, bank, pattern, step)) {
+                         stock != 0u, track, bank, pattern, step, &config)) {
         TmEvent e;
         tm_turing_event(track, bank, pattern, step, &e);
         tm_put_event(track, &e);
@@ -720,10 +770,14 @@ void tm_play(void) {
         if (!f->valid)
             continue;
         f->valid = 0;
-        if (!tm_on(f->bank, f->pattern, t))
+        TmConfig config;
+        tm_config(tm_cell(f->bank, f->pattern, t), &config);
+        if (!config.on) {
+            tm_scheduled[t] = 0;
             continue;
+        }
         if (tm_turing_record((volatile uint8_t *)(TM_EV_RECORD_FIRST + t * 32u), f->stock.event ? f->locks : 0,
-                             0, t, f->bank, f->pattern, f->step)) {
+                             0, t, f->bank, f->pattern, f->step, &config)) {
             TmEvent turing;
             tm_turing_event(t, f->bank, f->pattern, f->step, &turing);
             WORD(TM_FIRST_EVENT + 4u * t) = (uint32_t)turing.event;
@@ -750,8 +804,8 @@ void tm_play(void) {
  *    the ARP, the LFO and TRAN, which act on it as on the Turing note),
  *    NOT2..NOT4 locked to the NOTE itself (one note, as ON plays), its
  *    condition, microtiming and retrigs cleared (ON ignores them); its other
- *    locks kept; byte 30-31 of its record mark the NOTE lock as WRITE's and
- *    keep the centre it came from, so ON goes on playing the same notes.
+ *    locks kept; module-owned DRAM and saved comments keep the NOTE centre,
+ *    so ON goes on playing the same notes without owning another module's bytes.
  *    Its LED flashes as any locked trig's does on stock (a hand-placed trig
  *    with a NOTE lock flashes the same);
  *  - a rest: no note trig; a trig that carries locks becomes a trigless
@@ -796,21 +850,20 @@ unsigned tm_write_track(unsigned track) {
         volatile uint32_t *lock_bits = bits + TM_SEQ_LOCK_BITS + (step < 32u ? 1u : 0u);
         uint32_t bit = 1u << (step & 31u);
         unsigned trig = ((*note_bits | *lock_bits) & bit) != 0u;
-        unsigned centre = trig ? tm_centre(r, track, bank, pattern) : part;
+        unsigned centre = trig ? tm_centre(r, track, bank, pattern, step) : part;
         unsigned value = tm_step_value(&s, k.length);
         if (tm_gate(value, k.density)) {
             r[0] = (uint8_t)tm_turing_note(centre, value, k.scale);
             r[3] = r[4] = r[5] = TM_CHORD_NONE;
-            r[30] = TM_WRITTEN;
-            r[31] = (uint8_t)centre;
+            tm_written_centres[tm_index(c)][step] = (uint8_t)(centre + 1u);
             *note_bits |= bit;
             *lock_bits &= ~bit;
             conds[step] = 0;
             continue;
         }
-        if (r[30] == TM_WRITTEN) {
+        if (tm_written_centres[tm_index(c)][step]) {
             r[0] = r[3] = r[4] = r[5] = TM_LOCK_NONE;
-            r[30] = r[31] = TM_LOCK_NONE;
+            tm_written_centres[tm_index(c)][step] = 0;
         }
         unsigned others = 0;
         for (unsigned j = 0; j < 30u; ++j)
@@ -823,6 +876,32 @@ unsigned tm_write_track(unsigned track) {
             }
         }
     }
+    unsigned current = WORD(TM_BANK_PTR) == (uint32_t)banks;
+    for (unsigned step = 0; step < length; ++step) {
+        unsigned off = pattern * TM_SEQ_PATTERN_SIZE + track * TM_SEQ_TRACK_SIZE;
+        if (current) {
+            for (unsigned field = 0; field < 6u; ++field) {
+                if (field == 1u || field == 2u)
+                    continue;
+                BYTE(0x1001614eu + off + TM_SEQ_LOCKS + step * 32u + field) = locks[step * 32u + field];
+            }
+            *(volatile uint16_t *)(0x1001614eu + off + TM_SEQ_CONDS + 2u * step) = conds[step];
+        }
+        if (current && pattern == BYTE(TM_UI_PATTERN)) {
+            unsigned any = 0;
+            for (unsigned field = 0; field < 32u; ++field)
+                any |= locks[step * 32u + field] != TM_LOCK_NONE;
+            volatile uint8_t *index = (volatile uint8_t *)(0x46c7d2e4u + step);
+            if (any) *index |= (uint8_t)(1u << track);
+            else *index &= (uint8_t)~(1u << track);
+        }
+    }
+    if (current)
+        for (unsigned w = TM_SEQ_NOTE_BITS; w < TM_SEQ_LOCK_BITS + 2u; ++w)
+            WORD(0x1001614eu + 4u * (track * 556u + pattern * 9142u + w)) = bits[w];
+    WORD((uint32_t)banks + 0x9b332u) = 1;
+    WORD(0x100f8598u) = 1;
+    ((void (*)(void))0x40027e00u)();
     return 1;
 }
 
@@ -850,9 +929,16 @@ static volatile TmCell *tm_ui_cell(unsigned t) {
     return tm_cell(*(volatile uint8_t *)TM_UI_BANK, *(volatile uint8_t *)TM_UI_PATTERN, t);
 }
 
+static void tm_ui_config(unsigned t, TmConfig *k) {
+    tm_legacy_config(tm_ui_cell(t), k);
+    const volatile uint8_t *part = tm_part(tm_ui_bank_index(), BYTE(TM_CUR_PART) & 3u);
+    if (!tm_selected(part, t) || !tm_part_valid(part, t)) { k->on = 0; return; }
+    k->lock = tm_setting(part, t, 0); k->length = tm_setting(part, t, 1);
+    k->scale = tm_setting(part, t, 2); k->density = tm_setting(part, t, 3);
+}
 static unsigned tm_value(unsigned t, unsigned what) {
     TmConfig k;
-    tm_config(tm_ui_cell(t), &k);
+    tm_ui_config(t, &k);
     return what == TM_KNOB_MODE
                ? k.on
                : what == TM_KNOB_LOCK
@@ -863,7 +949,7 @@ static unsigned tm_value(unsigned t, unsigned what) {
 static void tm_change(unsigned t, unsigned what, int32_t delta, int32_t toggle) {
     volatile TmCell *c = tm_ui_cell(t);
     TmConfig k;
-    tm_config(c, &k);
+    tm_ui_config(t, &k);
     if (what == TM_KNOB_MODE) { /* ON again picks the phrase up where the pattern is (tm_position) */
         k.on = toggle ? !k.on : tm_clamp((int32_t)k.on + delta, 0u, 1u);
         if (tm_live[t].cell == tm_index(c))
@@ -884,6 +970,7 @@ static void tm_change(unsigned t, unsigned what, int32_t delta, int32_t toggle) 
                              ? k.lock
                              : what == TM_KNOB_LENGTH ? k.length : what == TM_KNOB_SCALE ? k.scale : k.density;
         tm_part_setting(b, p, t, what - 1u, value);
+        ((void (*)(void))0x40027e00u)();
     }
 }
 
@@ -941,6 +1028,8 @@ static void tm_build(void) {
 }
 
 static unsigned tm_shown(void) {
+    uint32_t window = WORD(TM_UI_WINDOW);
+    if (window && WORD(window + 8u)) return 0;
     return tm_ui.page == 1u && *(volatile uint32_t *)TM_UI_MIDI &&
            *(volatile uint32_t *)TM_UI_PAGE == TM_PAGE_ARP && !WORD(0x460d173au) && !WORD(0x460d1694u) &&
            tm_selected(tm_part(tm_ui_bank_index(), BYTE(TM_CUR_PART) & 3u), tm_track());
@@ -1024,6 +1113,7 @@ static void tm_assign(unsigned t, unsigned on) {
         TmConfig k = {0, TM_LOCK_DEFAULT, TM_LENGTH_DEFAULT, TM_SCALE_DEFAULT, TM_DENSITY_DEFAULT};
         unsigned b = tm_ui_bank_index(), p = BYTE(TM_CUR_PART) & 3u;
         tm_part_init(b, p, t, &k, 0);
+        ((void (*)(void))0x40027e00u)();
     }
 }
 static uint32_t tm_generator_page(uint32_t stock, unsigned page, unsigned second) {
@@ -1067,6 +1157,7 @@ static void tm_generator_knob(unsigned page, unsigned index, int delta, unsigned
     unsigned b = tm_ui_bank_index(), p = BYTE(TM_CUR_PART) & 3u, t = tm_track();
     unsigned old = tm_setting(tm_part(b, p), t, index ? 5u : 4u);
     tm_part_setting(b, p, t, index ? 5u : 4u, tm_clamp((int32_t)old + delta, 0u, index ? 11u : 2u));
+    ((void (*)(void))0x40027e00u)();
 }
 const struct modwerk_midi_generator tm_generator = {MODWERK_MIDI_GENERATOR_ABI, "TURING",  TM_GEN_ID,
                                                     (1u << TM_PAGE_ARP), tm_assign, tm_generator_page,
@@ -1120,15 +1211,17 @@ static const char tm_cell_format[] = "#TURING_B%d_P%d_T%d=%d,%d,%d,%d,%d\r\n";
 static const char tm_cell_format_bits[] = "#TURING_B%d_P%d_T%d=%d,%d,%d,%d,%d,%d,%d,%d,%d\r\n";
 static const char tm_first_key[] = "#TURING_FIRST=";
 
-void tm_project_defaults(void) {
-    tm_migration_ready = 0;
-    tm_project_loading = 0;
+static void tm_project_reset(void) {
     tm_ui.armed = 0;
     TmSettings s;
     tm_defaults(&s);
     s.flags = TM_FLAG_CELLS10;
     tm_write(&s);
     tm_cells_clear();
+    for (unsigned c = 0; c < CELL_COUNT; ++c)
+        for (unsigned step = 0; step < TM_STEPS; ++step)
+            tm_written_centres[c][step] = 0;
+    for (unsigned t = 0; t < TM_TRACKS; ++t) tm_scheduled[t] = 0;
     tm_globals.cells = 1;
     for (unsigned t = 0; t < TM_TRACKS; ++t)
         tm_drop(t);
@@ -1138,14 +1231,21 @@ void tm_project_defaults(void) {
  * detour runs just before the base's own project-end hook; UI ticks during
  * the load must never migrate a half-loaded project. */
 void tm_project_begin(void) {
-    tm_project_defaults();
+    uint16_t sr = tm_task_lock();
     tm_project_loading = 1;
+    tm_migration_ready = 0;
+    ++tm_load_generation;
+    tm_task_unlock(sr);
+    tm_project_reset();
+}
+void tm_project_defaults(void) {
+    unsigned loading = tm_project_loading;
+    tm_project_begin();
+    tm_project_loading = loading; /* stock defaults can run inside a load */
 }
 void tm_project_loaded(int result) {
-    if (result >= 0) {
-        tm_project_loading = 0;
-        tm_install_read_done = 1;
-    }
+    tm_project_loading = 0; /* a failed load must not latch Turing inert */
+    tm_install_read_done = result >= 0;
 }
 
 /* The decimal at *p (at most five digits), advancing past it; -1 when there
@@ -1245,7 +1345,35 @@ static void tm_project_cell(const char *p, int32_t parse_only) {
                   registered);
 }
 
+static void tm_project_centres(const char *p, int32_t parse_only) {
+    int32_t b = tm_decimal(&p), q, t;
+    if (b < 1 || b > (int32_t)TM_BANKS || *p++ != '_' || *p++ != 'P') return;
+    q = tm_decimal(&p);
+    if (q < 1 || q > (int32_t)TM_PATTERNS || *p++ != '_' || *p++ != 'T') return;
+    t = tm_decimal(&p);
+    if (t < 1 || t > (int32_t)TM_TRACKS || *p++ != '=') return;
+    uint8_t values[TM_STEPS];
+    for (unsigned i = 0; i < TM_STEPS; ++i) {
+        unsigned value = 0;
+        for (unsigned j = 0; j < 2u; ++j) {
+            unsigned digit = (unsigned char)*p++;
+            if (digit >= '0' && digit <= '9') digit -= '0';
+            else if (digit >= 'a' && digit <= 'f') digit -= 'a' - 10u;
+            else return;
+            value = value * 16u + digit;
+        }
+        if (value > 128u) return;
+        values[i] = (uint8_t)value;
+    }
+    if (!tm_eol(p) || parse_only) return;
+    unsigned index = (((unsigned)b - 1u) * TM_PATTERNS + (unsigned)q - 1u) * TM_TRACKS + (unsigned)t - 1u;
+    for (unsigned i = 0; i < TM_STEPS; ++i) tm_written_centres[index][i] = values[i];
+}
 void tm_project_line(const char *line, int32_t parse_only) {
+    if (tm_prefix(line, "#TURING_WB")) {
+        tm_project_centres(line + 10, parse_only);
+        return;
+    }
     if (tm_prefix(line, "#TURING_S2=1") && tm_eol(line + 12)) {
         if (!parse_only) {
             TmSettings s;
@@ -1300,6 +1428,21 @@ void tm_project_write(TmFormat format, TmLength length, TmWrite write, char *buf
                     k.scale = TM_SCALE_DEFAULT;
                     k.density = TM_DENSITY_DEFAULT;
                 }
+                const uint8_t *centres = tm_written_centres[tm_index(c)];
+                unsigned written = 0;
+                for (unsigned i = 0; i < TM_STEPS; ++i) written |= centres[i];
+                if (written) {
+                    static char centre_line[160];
+                    static const char hex[] = "0123456789abcdef";
+                    format(centre_line, "#TURING_WB%d_P%d_T%d=", (int)(b+1u), (int)(q+1u), (int)(t+1u));
+                    unsigned at = (unsigned)length(centre_line);
+                    for (unsigned i = 0; i < TM_STEPS; ++i) {
+                        centre_line[at++] = hex[centres[i] >> 4];
+                        centre_line[at++] = hex[centres[i] & 15u];
+                    }
+                    centre_line[at++] = '\r'; centre_line[at++] = '\n'; centre_line[at] = 0;
+                    write(file, centre_line, (int)at);
+                }
                 if (!k.on && !tm_seeded(c) && k.lock == TM_LOCK_DEFAULT && k.length == TM_LENGTH_DEFAULT &&
                     k.scale == TM_SCALE_DEFAULT && k.density == TM_DENSITY_DEFAULT)
                     continue;
@@ -1320,13 +1463,13 @@ void tm_project_write(TmFormat format, TmLength length, TmWrite write, char *buf
  * The file's I/O buffer belongs to stock until close; parse a separate block.
  */
 unsigned tm_modules_ready(void) {
+    ++tm_ready_events;
     if (tm_install_read_done || tm_project_loading)
         return 0;
-    tm_install_read_done = 1;
     uint32_t directory = ((uint32_t (*)(int,int))0x40025230u)(0,0);
     if (!directory)
         return 0;
-    char path[260];
+    static char path[260];
     const char *dir = (const char *)directory;
     unsigned n = 0;
     while (dir[n] && n < sizeof(path) - sizeof("/project.work")) {
@@ -1345,7 +1488,7 @@ unsigned tm_modules_ready(void) {
     if (opened < 0)
         return 0;
     tm_project_begin();
-    char block[512], line[160];
+    static char block[512], line[160];
     unsigned used = 0, overflow = 0;
     int more;
     do {
@@ -1371,6 +1514,6 @@ unsigned tm_modules_ready(void) {
         tm_project_line(line,0);
     }
     ((int (*)(void *))0x4001677cu)(file);
-    tm_project_loaded(0);
+    tm_project_loaded(more < 0 ? -1 : 0);
     return 0;
 }

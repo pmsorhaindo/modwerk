@@ -3,7 +3,7 @@
   "id": "turing-machine",
   "key": "TURING MACHINE",
   "name": "Turing Machine",
-  "version": "0.5.0-experimental",
+  "version": "0.5.1-experimental",
   "category": "midi-usb",
   "author": {
     "github": "pmsorhaindo",
@@ -118,7 +118,7 @@
     ],
     "effectId": null,
     "uiClaims": [
-      "key:PUSHA@MIDI TURING"
+      "key:PUSHA@MIDI AMP"
     ]
   },
   "resources": {
@@ -156,7 +156,7 @@
   "license": {
     "spdx": "MIT",
     "file": "LICENSE",
-    "declaration": "Original module source by pmsorhaindo under the MIT licence in LICENSE, built with octabam by Sam Banks. No Elektron firmware, extracted routines or tables are included; stock bytes are referenced by address, length and SHA-256. Original OT LCD captures are declared in media/LICENSE.md as LicenseRef-OT-UI-Documentation; underlying Elektron rights remain reserved. Reviewer verification is required before publication and is not automatic legal clearance."
+    "declaration": "Original module source by pmsorhaindo under the MIT licence in LICENSE, built with octabam by Sam Banks. No Elektron firmware, extracted routines or tables are included; stock bytes are referenced by address, length and SHA-256. No current OT LCD capture is included. Reviewer verification is required before publication and is not automatic legal clearance."
   },
   "media": [],
   "access": {

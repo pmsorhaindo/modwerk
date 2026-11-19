@@ -20,7 +20,7 @@ MODULE = Module(
     detours=(
         Detour(0x4009fa2a, stock_guard(0x4009fa2a, 6, "1a818bb964bc3b78d3f8eac772a8ce85ac6df50971c59376a8e954d91d547117"),
                "tm", "tm_chord_hook",
-               "MIDI note routine, a step firing, before the arpeggiator's input: a Turing step (its record tagged) drops NOT2..NOT4, one note a step",
+               "MIDI note routine, a step firing, before the arpeggiator's input: a Turing-owned scheduled step drops NOT2..NOT4, one note a step",
                kind="jmp"),
         Detour(0x4009cf4c, stock_guard(0x4009cf4c, 8, "dc335d0aed0cc4febec4501776825159505f5b413de340f6e74208856577c47b"),
                "tm", "tm_eval_hook",

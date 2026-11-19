@@ -7,21 +7,16 @@
 | chord fp@(-4..-1) = NOTE, NOT2..NOT4 (-1 = none) is built from the
 | track's resolved (LFO-modulated) bytes and about to go to the
 | arpeggiator's input (0x40099c08) and out. The tick ISR has just copied the
-| fired step's record to 0x46c7a000 + 32 * track; a Turing step's carries
-| TM_TAG and its step in bytes 30-31 (turing.c): tm_fired knows it and
+| fired step's record to 0x46c7a000 + 32 * track. tm_fired uses Turing's
+| scheduling/track ownership, never saved bytes 30-31, and
 | NOT2..NOT4 are dropped, one note a step. Before the mute and VEL checks,
 | so a muted step counts as played. d7 = track; d0/d1/a0/a1 are written
 | before they are read again; the displaced instructions set no flag
 | anyone reads.
 tm_chord_hook:
-        move.l  %d7,%d0
-        lsl.l   #5,%d0
-        lea     0x46c7a01e,%a0
-        mvz.w   (%a0,%d0.l),%d1
-        move.l  %d1,-(%sp)
         move.l  %d7,-(%sp)
         jsr     tm_fired
-        addq.l  #8,%sp
+        addq.l  #4,%sp
         tst.l   %d0
         beq.s   1f
         moveq   #-1,%d0
@@ -71,9 +66,9 @@ tm_play_hook:
 
 | The project file. The loader 0x400866c4 runs twice per load, a parse-only
 | pass then a storing pass; 58(%sp) in its frame is nonzero on the
-| parse-only pass. Scale Quantizer hooks the neighbouring instructions
-| (0x400866cc, 0x400867a2, 0x400888aa, 0x40025ac2); these sites are its
-| neighbours, so the two compose without sharing a site.
+| parse-only pass. The base owns the adjacent take-hook/fxmap seams;
+| these guarded detours leave those sites intact. Shared project call hooks
+| require a separate owner-reviewed base change, not a private host patch.
 
 | Loader entry, after the frame is set up (0x400866ee): a storing load
 | starts from the defaults.
@@ -154,8 +149,9 @@ tm_push_hook:
         movem.l %d2-%d5,(%sp)       | displaced
         jmp     0x4004ed04
 
-| Explicitly initialized, loader-owned DRAM: a DRAM unit's .bss is never
-| cleared. The C's static assertions check the sizes.
+| Runtime-package storage. The USB loader zeros BSS before publication.
+| Card firmware builds are not a supported delivery route for this module.
+        .bss
         .balign 4
         .global tm_globals, tm_ui, tm_desc, tm_first_steps, tm_live
 tm_first_steps:                     | each track's last first-step evaluation (TmFirst)
@@ -170,7 +166,7 @@ tm_desc:                            | the TURING page's descriptor, built on fir
         .zero   0x194
 
 | Session storage belongs entirely to this linked DRAM unit. Keep it in
-| initialized sections: both card and runtime loaders copy these zero bytes.
+| BSS: the runtime loader clears it; saved comments restore project state.
         .balign 4
         .global tm_settings, tm_test_seed, tm_random_states, tm_cells
 tm_settings:

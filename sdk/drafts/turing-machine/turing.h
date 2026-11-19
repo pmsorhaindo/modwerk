@@ -58,7 +58,7 @@ typedef struct {
     uint32_t check;                 /* ~seed */
 } TmTestSeed;
 
-/* Allocated as initialized bytes in hooks.s, not uncleared .bss. */
+/* Allocated in runtime-loader-zeroed BSS in hooks.s. */
 extern volatile TmSettings tm_settings;
 extern volatile TmCell tm_cells[TM_BANKS * TM_PATTERNS * TM_TRACKS];
 extern volatile uint32_t tm_random_states[TM_TRACKS];
@@ -107,15 +107,12 @@ extern volatile TmTestSeed tm_test_seed;
  * NOTE; the step scheduler and the tick ISR read them so). A lock record's
  * byte i replaces the track's resolved byte i (i < 30, the tick ISR's
  * loop): 0 NOTE, 1 VEL, 2 LEN, 3..5 NOT2..NOT4 (0x40: the NOTE itself,
- * which the note routine plays once), ...; bytes 30 and 31 are copied with
- * the record and never read by stock (in the pattern they are 0xff). */
+ * which the note routine plays once), ...; bytes 30 and 31 belong to Arp Key Locks and are never written by Turing. */
 #define TM_SEQ_PART 0x8e57u
 #define TM_PART_TRACKS 0x8f162u
 #define TM_PART_SIZE 6322u
 #define TM_LOCK_NONE 0xffu
 #define TM_CHORD_NONE 0x40u
-#define TM_TAG 0x54u                /* "T" in a record's byte 30: a Turing note; byte 31 its step */
-#define TM_WRITTEN 0x57u            /* "W" in a pattern record's byte 30: WRITE put this NOTE lock; byte 31 the centre */
 /* The record of the step the tick ISR fired last, per track (copied there
  * from the slot as it fires; the note routine runs after it). */
 #define TM_EV_FIRED 0x46c7a000u
@@ -236,7 +233,7 @@ void tm_stock_eval(uint32_t track, uint32_t bank, uint32_t pattern, uint32_t ste
 void tm_play(void);
 extern TmFirst tm_first_steps[TM_TRACKS];
 extern TmLive tm_live[TM_TRACKS];
-int32_t tm_fired(uint32_t track, uint32_t tag);
+int32_t tm_fired(uint32_t track);
 void tm_generator_tick(void);
 unsigned tm_note_claims(unsigned track);
 unsigned tm_note_key(unsigned track, volatile int8_t *note);

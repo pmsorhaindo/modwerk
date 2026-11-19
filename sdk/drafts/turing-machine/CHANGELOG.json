@@ -1,12 +1,13 @@
 [
   {
-    "version": "0.5.0-experimental",
-    "date": "2026-11-18",
+    "version": "0.5.1-experimental",
+    "date": "2026-11-19",
     "changes": [
-      "Ports Turing to a USB MIDI generator module for Modwerk base 0.7.9.",
-      "Release FUNC before editing SCALE and ROOT; FUNC plus LOCK snapping is retired.",
-      "Known issue: hardware and physical USB installation remain untested.",
-      "Documentation/testing update: records local software verification results."
+      "Ports Turing to a draft MIDI generator package for Modwerk base 0.7.9.",
+      "WRITE preserves Arp Key Locks data and follows stock pattern-save bookkeeping.",
+      "Protects legacy imports during loads and edits the displayed Part consistently.",
+      "Release FUNC before SCALE/ROOT; WRITE requires the uncovered main AMP page.",
+      "Known issue: hardware and physical USB installation remain untested."
     ]
   }
 ]
