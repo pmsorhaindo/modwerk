@@ -6,11 +6,11 @@ The module lives in `sdk/drafts/turing-machine/`; its draft release notes are `C
 
 ## Exact acceptance build
 
-The documented command `npm run module:dev -- turing-machine --build-only --out /private/review-turing24.mwrm` built the acceptance artifact, title **Turing Machine**, using the installed, read-only native toolchain. Local evidence is under `../diag/out/brief24/`; no firmware, binary, card, dump or extracted stock data is committed.
+The documented command `npm run module:dev -- turing-machine --build-only --out /private/review-turing24-final.mwrm` built the acceptance artifact, title **Turing Machine**, using the installed, read-only native toolchain. Local evidence is under `../diag/out/brief24/`; no firmware, binary, card, dump or extracted stock data is committed.
 
-`review-build-final.log`: **19,860 initialized bytes + 162,384 BSS = 182,244 bytes (178.0 KiB)**, 246 relocations, three table/event hooks and nine code sites. This is below the 128 KiB initialized-image and 288 KiB total caps; loader overhead and whole-set headroom are unmeasured. The package harness links the committed assembly and shared scale SDK and asserts exact initialized-image bytes, BSS size and relocation count before every acceptance boot. Explicit zero tables now reside in BSS, which the runtime loader clears. `manifest.py` remains the build recipe for the module package; it does not qualify the superseded all-in-one card route.
+`review-boundary-build.log`: **19,820 initialized bytes + 162,384 BSS = 182,204 bytes (177.9 KiB)**, 245 relocations, three table/event hooks and nine code sites. This is below the 128 KiB initialized-image and 288 KiB total caps; loader overhead and whole-set headroom are unmeasured. The package harness links the committed assembly and shared scale SDK and asserts exact initialized-image bytes, BSS size and relocation count before every acceptance boot. Explicit zero tables now reside in BSS, which the runtime loader clears. `manifest.py` remains the build recipe for the module package; it does not qualify the superseded all-in-one card route.
 
-The executed source revision is `7b74656e5` (legacy WRITE compatibility included). Subsequent assembly comments do not change the executable image. Harness and documentation revisions are recorded separately in the private review response.
+The acceptance harness is `b6a2b5a17` plus standalone import fix `46118bf15`. The executed source revision is `32019deda` (legacy WRITE compatibility and queued boundary ownership included). Subsequent assembly comments do not change the executable image. Harness and documentation revisions are recorded separately in the private review response.
 
 ## Review observations
 
@@ -18,20 +18,20 @@ A full ledger with exit status and interrupted attempts is in the private `CODEX
 
 | Gate | Observation | Local evidence |
 | --- | --- | --- |
-| Fixed-seed C engine | PASS: 3,870,720 transitions, three note ranges per transition, versus read-only turing-arpgen | `review-port-native.log` |
-| Linked ColdFire note-key entry | PASS: 4,644 signed-byte inputs across OFF/MAJ/MIN and all roots, executing the shipped inlined wrapper. The separate shared wrapper also passes 4,680 inputs including 128. | `review-runtime.log`, `review-port-native.log` |
-| Ownership, WRITE, UI and load races | PASS: ten executed ColdFire tests, including AKL 84, unchanged lock bytes 30/31, owned centre serialization, stock mirror/edited/index contract, covered window, divergent displayed/playing Parts, failed load and migration generation interleavings | `review-runtime.log` |
+| Fixed-seed C engine | PASS: 3,870,720 transitions, three note ranges per transition, versus read-only turing-arpgen | `review-port-native-final.log` |
+| Linked ColdFire note-key entry | PASS: 4,644 signed-byte inputs across OFF/MAJ/MIN and all roots, executing the shipped inlined wrapper. The separate shared wrapper also passes 4,680 inputs including 128. | `review-boundary-runtime.log`, `review-port-native-final.log` |
+| Ownership, WRITE, UI and load races | PASS: eleven executed ColdFire tests, including AKL 84, unchanged lock bytes 30/31, owned centre serialization, stock mirror/edited/index contract, covered window, divergent displayed/playing Parts, failed load and migration generation interleavings | `review-boundary-runtime.log` |
 | Late importer | PASS: chunk/partial/final-newline parsing, transient directory/open/read retries, and rejection of superseded-project text/completion | `review-import.log` |
-| Fixed-seed firmware reference | Rerun in progress: OFF/four keys plus four unlocked LEN 5/7, DENS 64, SCAL 0/127 cases | `review-reference-final.log` |
-| UI / S2 / stock MIDI | PASS: corrected backend-wake harness, 14 UI/S2 and six stock fixture/contract assertions, exit 0; MODE-OFF messages, clock/transport, tick and track-step counts | `review-wake-smoke.log` |
-| AKL coexistence and held-FUNC TRAN | Rerun in progress: AKL non-Turing four-note chords, WRITE preserves AKL KEY/shift, covered NOTE SETUP, actual TRAN transposition | `review-coexist-final.log` |
+| Fixed-seed firmware reference | Rerun in progress: OFF/four keys plus four unlocked LEN 5/7, DENS 64, SCAL 0/127 cases | `review-qualified-reference.log` |
+| UI / S2 / stock MIDI / cached legacy import | Earlier candidate PASS: 20 UI/S2/stock assertions; final build rerun in progress, including cached legacy files | `review-qualified-wake.log`; earlier `review-wake-smoke.log` |
+| AKL coexistence and held-FUNC TRAN | Rerun in progress: AKL non-Turing four-note chords, WRITE preserves AKL KEY/shift, covered NOTE SETUP, actual TRAN transposition | `review-qualified-coexist.log` |
 | SAVE / RELOAD / fresh saved-card boot | In progress: stronger gate clears the two edited flags after saving the fixture, proves WRITE alone sets them, and compares MODE-OFF written trigs after RELOAD and a fresh boot, alongside the original strict MODE-ON phrase checks | `review-reload.log` |
-| Natural Kept-set restore / PROJECT CHANGE | In progress: actual base card writer and plain boot, without backend reinstall or manual wake on the restoring boot | `review-lifecycle-v2.log` |
-| Paired FX after real modules-ready | PASS: all 26 complete arrays byte-identical before/after Turing; no FX word excluded | `review-fx-capture.log` |
-| Draft doctor | PASS: experimental checks green, exit 0; publication, CPU, screenshots and hardware requirements remain pending | `review-doctor.log` |
-| Repository check / PR readiness | Rerun after this ledger update. First review check correctly rejected the stale 0.5.0 TESTING heading. | `review-check.log` |
+| Natural Kept-set restore / PROJECT CHANGE | In progress: actual base card writer and plain boot, without backend reinstall or manual wake on the restoring boot | `review-qualified-lifecycle-rerun.log` |
+| Paired FX after real modules-ready | PASS: all 26 complete arrays byte-identical before/after Turing; no FX word excluded | `review-qualified-fx.log` |
+| Draft doctor | PASS: experimental checks green, exit 0; publication, CPU, screenshots and hardware requirements remain pending | `review-qualified-doctor.log` |
+| Repository check / PR readiness | Full check PASS: 3,258 app tests, 718 SDK tests and isolated draft-doctor checks. Clean final-source rerun pending below; pr:ready fails because branch is behind current main. First check rejected stale 0.5.0 heading. | `review-check-updated.log`, `review-qualified-check.log`, `review-pr-ready.log` |
 
-The expanded reference initially decoded repeated bytes because ot_emu **adds** memory-watch ranges on each `watchmem`. Re-registering the same ring duplicates each queued byte and breaks MIDI running status. `watch_midi_out` now registers each ring once per port; raw UART output demonstrated the discrepancy. Failed/interrupted diagnostic logs are retained, not silently counted as passes. The strict musical assertions remain.
+The expanded reference initially decoded repeated bytes because ot_emu **adds** memory-watch ranges on each `watchmem`. Re-registering the same ring duplicates each queued byte and breaks MIDI running status. `watch_midi_out` now registers each ring once per port; raw UART output demonstrated the discrepancy. Failed/interrupted diagnostic logs are retained, not silently counted as passes. The strict musical assertions remain. The isolated pattern gate also caught a real last-step chord leak: checking the next pattern's MODE discarded ownership of the final queued Turing step. `32019deda` keeps ownership captured by scheduling, clears it for stock/first-step evaluations, and adds a linked regression across pattern/Part changes. Its firmware pattern rerun is `review-boundary-pattern.log`. The stronger reload first pass failed only the new fresh-boot MODE-OFF assertion; a saved-card probe is investigating that failure (`review-boot-write-probe.log`), so it is not a completed persistence pass.
 
 ## Sequencer cost
 
@@ -39,7 +39,7 @@ The linked instruction counter executes eight ON tracks with non-following catch
 
 ## Stock FX: exactly what matches
 
-**Before versus after Turing on base 0.7.9: byte-identical.** The paired `review-fx-capture.log` captures all 13 complete arrays on each DSP after the real modules-ready event. All 26 match, including COMPRESSOR and SPRING; no FX word is ignored. Resident-P differences in this pair are six core-A and three core-B meter words; no DMA-mask operand differs in this pair.
+**Before versus after Turing on base 0.7.9: byte-identical.** The paired `review-qualified-fx.log` captures all 13 complete arrays on each DSP after the real modules-ready event. All 26 match, including COMPRESSOR and SPRING; no FX word is ignored. Resident-P differences in this pair are six core-A and three core-B meter words; no DMA-mask operand differs in this pair.
 
 **Base 0.7.9 versus original 1.40C: behaviourally identical in the bounded software proof, not wholly byte-identical.** Twelve arrays per core and the shared helpers match after documented relocation normalization. The base's existing COMPRESSOR bridge differs in four words per core (176/180 words match). The dormant bridge paths reproduce the displaced stock prefixes over 4,096 seeded machine states per core/entry, 16,384 comparisons, with equal registers, status, stack/return state and X/Y memory. The unchanged remainder resumes with equal state. `stock-fx-qualified.log`, `stock-fx-bridge-qualified.log` and `FX_EVIDENCE.md` hold that earlier proof; the base and its captured FX code are unchanged. Michael explicitly accepted this behavioural comparison. No hardware audible/timing or exhaustive-state equivalence is claimed.
 
@@ -60,7 +60,7 @@ TURING_REFERENCE_DIR=/read-only/turing-arpgen/sdk/octabam/modules/turing-machine
 python3.11 sdk/drafts/turing-machine/test_runtime.py -v
 python3.11 sdk/drafts/turing-machine/test_import.py -v
 python3.11 -u -B sdk/drafts/turing-machine/verify.py \
-  --base /private/base079 --package /private/review-turing24.mwrm \
+  --base /private/base079 --package /private/review-turing24-final.mwrm \
   --native /read-only/native-tooling --emulator /private/ot_emu \
   --output /private/new-run
 npm run module:doctor -- --draft turing-machine

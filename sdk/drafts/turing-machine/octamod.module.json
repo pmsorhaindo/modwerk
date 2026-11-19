@@ -125,11 +125,11 @@
     "recorded": "2026-11-19",
     "storage": {
       "label": "Runtime memory",
-      "display": "178.0 KiB",
-      "value": 182244,
+      "display": "177.9 KiB",
+      "value": 182204,
       "unit": "bytes",
       "method": "static",
-      "conditions": "19,860 initialized image bytes plus 162,384 bytes BSS in the documented draft build; includes module-owned WRITE-centre metadata. Within 128 KiB image and 288 KiB total caps. Hardware and whole-set headroom remain unmeasured.",
+      "conditions": "19,820 initialized image bytes plus 162,384 bytes BSS in the documented draft build; includes module-owned WRITE-centre metadata. Within 128 KiB image and 288 KiB total caps. Hardware and whole-set headroom remain unmeasured.",
       "source": "TESTING.md"
     },
     "processing": {
@@ -151,7 +151,7 @@
       "verify_beta.py: runtime admission, replacement, Undo and removal in the emulator",
       "test_port.py: fixed-seed reference engine equality and shared scale SDK compatibility"
     ],
-    "evidenceRevision": "20782011e03cf3a4543044bec48a38176e5d141e"
+    "evidenceRevision": "46118bf15a80f8b8567ae541446fbd711727cabb"
   },
   "license": {
     "spdx": "MIT",
