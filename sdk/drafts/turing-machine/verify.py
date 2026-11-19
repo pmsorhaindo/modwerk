@@ -425,6 +425,7 @@ def periodic(seq, period, settle=LENGTH):
 
 def open_page(port):
     """PROJ > CONTROL > MIDI SEQUENCER from any menu state, cursor on row 0."""
+    dismiss_windows(port)
     port.press("MENU")
     port.run(400)
     port.press("LEFT")
@@ -952,8 +953,19 @@ def settle_card(port, at_least_ms=4000, at_most_ms=90000):
     raise SystemExit(f"verify_turing: the card was still being written after {at_most_ms} ms")
 
 
+def dismiss_windows(port):
+    """Return from covered stock windows before starting a panel fixture."""
+    for _ in range(8):
+        window=int.from_bytes(port.peek(0x400bcd14,4),'big')
+        if not window or not int.from_bytes(port.peek(window+8,4),'big'):
+            return
+        port.press('NO')
+    raise RuntimeError('Stock window still covers the requested page')
+
+
 def project_menu(port, downs):
     """PROJ > PROJECT list item `downs` rows below CHANGE (SAVE 1, RELOAD 2, the set's CHANGE 6)."""
+    dismiss_windows(port)
     port.press("MENU")
     port.run(400)
     port.press("LEFT")
@@ -2376,7 +2388,7 @@ def reload_run(image, work):
         reloaded = bar_phrase(play_timed(port, 4300))
         port.enc("A",-4)
         off_reloaded=bar_phrase(play_timed(port,4300))
-        check('After RELOAD, MODE OFF plays the exact saved WRITE trigs',off_reloaded==ref)
+        check('After RELOAD, MODE OFF plays the exact saved WRITE trigs',cell(port,0,0,0)['on']==0 and off_reloaded==ref,f'{cell(port,0,0,0)} / {off_reloaded} / {ref}')
         port.enc("A",4)
         print(f"    reload: before SAVE {ref}\n      written (OFF) {written}\n      after RELOAD {reloaded}")
         check("(5) SAVE while playing mid-pass, RELOAD: the cell's register is the one saved (the pass's first step)",
@@ -2410,7 +2422,7 @@ def reload_run(image, work):
         open_turing(port)
         port.enc("A",-4)
         off_booted=bar_phrase(play_timed(port,4300))
-        check('Fresh saved-card boot, MODE OFF plays the exact saved WRITE trigs',off_booted==ref)
+        check('Fresh saved-card boot, MODE OFF plays the exact saved WRITE trigs',cell(port,0,0,0)['on']==0 and off_booted==ref,f'{cell(port,0,0,0)} / {off_booted} / {ref}')
     finally:
         port.quit()
     check("(6) the track keys select tracks after WRITE, SAVE and RELOAD while playing and after a boot load",

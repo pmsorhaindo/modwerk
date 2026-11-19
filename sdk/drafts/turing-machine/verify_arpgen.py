@@ -48,6 +48,7 @@ def choose(port):
 
 
 def open_turing(port):
+    v.dismiss_windows(port)
     choose(port)
     v.page_key(port)
     # NO on the first page forwards to stock. Avoid injecting an unrelated
