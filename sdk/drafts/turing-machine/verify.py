@@ -659,12 +659,17 @@ def setup_tracks(port, tracks):
     """In MIDI mode: each track's channel (FUNC+SRC) and its trigs (grid recording)."""
     for track, channel, steps in tracks:
         port.press(track)
+        index = int(track[1:]) - 1
+        current = port.peek(0x46c76de0 + 68 * index, 1)[0]
+        assert current <= 16 and 0 <= channel <= 16
         port.press("FUNC", "SRC")
         port.run(300)
-        port.enc("A", -120)                 # channel OFF; multiple of four leaves no partial detent
-        for _ in range(channel):
-            port.enc("A", 4)
+        # Use the observed saved channel, not a saturating negative sweep:
+        # stock retains encoder motion beyond the channel range.
+        for _ in range(abs(channel - current)):
+            port.enc("A", 4 if channel > current else -4)
         port.press("YES")
+        assert port.peek(0x46c76de0 + 68 * index, 1)[0] == channel, 'NOTE SETUP did not apply the requested channel'
         port.press("SRC")
         port.press("REC")
         for step in steps:
