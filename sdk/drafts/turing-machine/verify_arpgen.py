@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Exercise the existing Turing engine gate through its new generator UI.
 
-The historical verify.py remains unchanged. This adapter selects TURING in
+The historical engine assertions are retained; approved FUNC UI and package-dispatch edits are documented in TESTING.md. This adapter selects TURING in
 NOTE SETUP instead of using the retired AMP ring, and addresses shared Part
 settings in fixtures. Tests for retired ARP/ring/storage contracts are replaced
 by the explicit S2 checks below, never counted as passing unchanged.
@@ -534,11 +534,24 @@ def reference_arpgen_run(image,work,reference):
                 v.check(tag+f' SCALE {scale} ROOT {root} has 32 notes on the stock grid',
                         len(own)>=32 and v.lockstep(own,grid)[0])
                 captured.append([(n,vel) for _,n,vel in v.onsets(events,0)][:32])
+            # Exercise flips, byte-note loops, rests and pitch-range extremes.
+            # Both actual firmwares receive the same explicit register/RNG.
+            for lock,length,span in ((25,5,0),(25,7,127),(64,5,127),(64,7,0)):
+                prior=port.peek(part+0x1832+4,2)
+                port.cmd(f'poke {part+0x1832+4:#x} c0c0')
+                poke_cell(port,0,0,0,True,lock,length,(0x12345678beef0001,0x13572469),span,64)
+                v.watch_midi_out(port)
+                events=v.play_timed(port,4300)
+                own,grid=v.grid_steps(events,0,1)
+                phrase=tuple((i,*own[i]) for i in sorted(own) if i<32)
+                v.check(tag+f' unlocked LOCK {lock} LEN {length} SCAL {span} DENS 64 has notes and rests',
+                        grid>=32 and 0<len(phrase)<32)
+                captured.append(phrase)
         finally:
             port.quit()
         phrases.append(captured)
-    v.check('Fixed register/seed UART notes and velocities equal turing-arpgen across OFF and four MAJ/MIN keys',
-            len(phrases)==2 and phrases[0]==phrases[1] and all(len(p)==32 for p in phrases[1]),str(phrases))
+    v.check('Fixed register/seed UART equality: OFF/four keys plus unlocked short loops, density and range extremes',
+            len(phrases)==2 and phrases[0]==phrases[1] and all(len(p)==32 for p in phrases[1][:5]) and len(phrases[1])==9,str(phrases))
 
 
 def stock_contract_run(image,work):
@@ -559,6 +572,55 @@ def stock_contract_run(image,work):
             abs(ours[2]-stock[2])<=1 and stock[2]>300,f'ours {ours[2]} stock {stock[2]}')
     v.check('T1 ON, CLOCK SEND: T1 plays one note a step, as many as T2',
             len(v.track_ons(v.notes(ours[1]),0))==len(v.track_ons(v.notes(ours[1]),1))>=16)
+
+
+def review_run(image,work):
+    """Panel/UART regressions with the independently packaged Arp Key Locks."""
+    port=v.Port(image,work)
+    try:
+        v.check('Both Turing and Arp Key Locks installed',call(port,'modwerk_runtime_active')==2)
+        v.fixture(port,(('T1',1,range(1,17)),('T2',2,range(1,17))))
+        port.enc('E',12);port.enc('F',16) # SRC NOT3/NOT4; fixture already sets NOT2
+        for step in range(16):
+            port.cmd(f'poke {v.BANK0+0x4900+32*step+30:#x} 54ff')
+        v.watch_midi_out(port)
+        events=v.play_timed(port,4300)
+        chord=v.onsets(events,0);grid=v.onsets(events,1)
+        v.check('AKL B-Locrian on non-Turing T1 retains NOT2/NOT3/NOT4',
+                len(grid)>=32 and len(chord)==4*len(grid),f'{len(chord)} notes / {len(grid)} steps')
+        page_tracks(port,{1:(True,127,16,64,127)})
+        locks=v.BANK0+0x4900
+        for step in range(16):port.cmd(f'poke {locks+32*step+30:#x} 543f')
+        saved=[port.peek(locks+32*step+30,2) for step in range(16)]
+        v.push_a(port)
+        v.check('WRITE leaves all AKL KEY and shift lock bytes unchanged',
+                [port.peek(locks+32*step+30,2) for step in range(16)]==saved)
+        ui=v.elf_symbol('tm_ui')
+        writes=port.peek(ui+24,4)
+        port.press('FUNC','SRC')
+        v.push_a(port)
+        v.check('Encoder A push in NOTE SETUP does not WRITE',port.peek(ui+24,4)==writes)
+        port.press('NO');open_turing(port)
+        part=current_part(port)
+        settings=port.peek(part+0x1832,16)
+        trans=port.peek(part+0x3e2+12,1)[0]
+        # Use an unwritten pattern so WRITE-centre persistence is independent.
+        port.press('PATTERN','TRIG2');port.run(300)
+        open_turing(port)
+        part=current_part(port)
+        state=(0x12345678beef0001,0x13572469)
+        poke_cell(port,0,1,0,True,127,16,state,64,127)
+        v.watch_midi_out(port);before=v.track_ons(v.play(port,4300),0)
+        port.key('FUNC',True,60);port.enc('A',1);port.key('FUNC',False,60)
+        changed=port.peek(part+0x3e2+12,1)[0]
+        v.check('Held FUNC edits stock TRAN and leaves Turing Part settings unchanged',
+                changed==trans+1 and port.peek(part+0x1832,16)==settings)
+        poke_cell(port,0,1,0,True,127,16,state,64,127)
+        v.watch_midi_out(port);after=v.track_ons(v.play(port,4300),0)
+        v.check('Held-FUNC TRAN transposes the fixed generated phrase by one semitone',
+                len(before)>=32 and after==[n+1 for n in before],f'{before[:8]} / {after[:8]}')
+    finally:
+        port.quit()
 
 
 def main():
@@ -588,7 +650,7 @@ def main():
     v.elf_symbol = lambda name: symbols['turing-machine:' + name]
     v.SETTINGS, v.TEST_SEED, v.RANDOM, v.CELLS = (v.elf_symbol(n) for n in
         ('tm_settings', 'tm_test_seed', 'tm_random_states', 'tm_cells'))
-    runs = {'stock': stock_contract_run, 'reference': lambda i,w: reference_arpgen_run(i,w,args.reference_arpgen), 'func': func_contract_run, 'storage': storage_run, 's2': s2_run, 'migration': migration_run,
+    runs = {'review': review_run, 'stock': stock_contract_run, 'reference': lambda i,w: reference_arpgen_run(i,w,args.reference_arpgen), 'func': func_contract_run, 'storage': storage_run, 's2': s2_run, 'migration': migration_run,
             'key': lambda i,w: key_reference_run(i,w,args.reference_image),
             'replace': v.replace_run, 'locks': v.locks_run, 'nei': v.nei_run,
             'range': v.range_run, 'lfo': v.lfo_run, 'clock': v.clock_run, 'live': v.live_length_run,

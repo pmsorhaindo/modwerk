@@ -46,6 +46,7 @@ def main():
         parser.add_argument('--'+name,type=Path,required=True)
     parser.add_argument('--runs',default='stock,func,storage,s2,migration,replace,locks,nei,range,lfo,clock,model,lock,live,fresh,scale,density,write,flags,toggle,pattern,timer,reload,oldlines')
     parser.add_argument('--reference-image',type=Path)
+    parser.add_argument('--companion',type=Path,action='append',default=[])
     parser.add_argument('--reference-arpgen',type=Path)
     args = parser.parse_args()
     for name in ('base','package','native','emulator','output'):
@@ -86,6 +87,15 @@ def main():
                     self.quit()
                     raise RuntimeError(f'Runtime backend stage {index} refused {refusal}')
             assert invoke(backend[8],0) == invoke(backend[3],0) == 1
+            for companion in args.companion:
+                data=companion.resolve().read_bytes()
+                for at in range(0,len(data),4096):
+                    self.cmd(f'poke {address+at:#x} {data[at:at+4096].hex()}')
+                for index,values in ((1,(0,)),(4,(0,address,len(data))),(6,(0,))):
+                    if invoke(backend[index],*values)!=1:
+                        self.quit()
+                        raise RuntimeError(f'Companion backend stage {index} refused')
+                assert invoke(backend[8],0) == invoke(backend[3],0) == 1
             record=invoke(base['modwerk_runtime_module'],0)
             descriptor=int.from_bytes(self.peek(record+8+4*31,4),'big')
             origin=descriptor-offsets['tm_generator']
@@ -104,8 +114,8 @@ def main():
             for _ in range(2):
                 invoke(0x40000c3c, 0x460d17ce, wake)
                 self.run(500)
-            assert int.from_bytes(self.peek(resolved['tm_install_read_done'], 4), 'big') == 1, \
-                'The base engine did not deliver module-ready initialization'
+            assert int.from_bytes(self.peek(resolved['tm_ready_events'], 4), 'big') >= 1, \
+                'The base engine did not deliver modules-ready'
     v.Port=InstalledPort
     sys.argv=[str(HERE/'verify_arpgen.py'),str(args.base/'MAIN.raw'),'--symbols',str(init_symbols),
               '--native',str(args.native),'--emulator',str(args.emulator),'--output',str(args.output),

@@ -1841,7 +1841,7 @@ def fresh_run(image, work):
 
 
 def lock_run(image, work):
-    """(a) the LOCK curve under the port, (b) FUNC + LOCK snaps, (c) LEN 2, 16, 33, 64 at LOCK 127. T1 empty, T2 a
+    """(a) the LOCK curve under the port, (b) plain LOCK curve and clamps (FUNC+LOCK retired), (c) LEN 2, 16, 33, 64 at LOCK 127. T1 empty, T2 a
     trig every step, PATTERN SCALE 2X (a step every 62.5 ms)."""
     port = Port(image, work)
     try:
@@ -2240,8 +2240,9 @@ def write_flags_check(image, work):
         check("(3) WRITE: OCTABAM10's payload (out/turing_10.bin) present for the comparison", False, "")
         return
     theirs, _hand = write_trigs(ten, work / "ten")
-    check("(3) WRITE: trig bits, trigless bits, lock records and step words byte-identical to OCTABAM10's (the same "
-          "trig type and LEDs)", ours == theirs and ours[0], f"ours {ours[0]:016x}/{ours[1]:016x} OCTABAM10 "
+    check("(3) WRITE: trig bits, trigless bits, stock-visible lock bytes 0..29 and step words equal OCTABAM10's (the same "
+          "trig type and LEDs)", ours[:2] == theirs[:2] and [r[:30] for r in ours[2]] == [r[:30] for r in theirs[2]]
+          and ours[3] == theirs[3] and ours[0], f"ours {ours[0]:016x}/{ours[1]:016x} OCTABAM10 "
           f"{theirs[0]:016x}/{theirs[1]:016x}, records differ at {[i for i in range(64) if ours[2][i] != theirs[2][i]][:8]}")
 
 
@@ -2327,9 +2328,20 @@ def reload_run(image, work):
         page_tracks(port, {1: (True, 127, 16, 64, 64)})
         watch_midi_out(port)
         ref = bar_phrase(play_timed(port, 4300))
+        # Save the fixture before WRITE so no earlier Part edit can rescue it.
+        project_menu(port,1)
+        port.press("YES")
+        settle_card(port,at_least_ms=8000)
+        port.press("NO")
+        bank=int.from_bytes(port.peek(0x46c82456,4),'big')
+        port.cmd(f'poke {bank+0x9b332:#x} 00000000')
+        port.cmd('poke 0x100f8598 00000000')
         port.press("PLAY")
         port.run(2900)                      # into the second pass, mid-pass
         push_a(port)
+        check('WRITE alone marks the clean saved bank edited',
+              port.peek(bank+0x9b332,4)==bytes.fromhex('00000001') and
+              port.peek(0x100f8598,4)==bytes.fromhex('00000001'))
         keys["WRITE while playing"] = track_keys(port)
         port.press("T1")
         anchor = cell(port, 0, 0, 0)
@@ -2356,6 +2368,10 @@ def reload_run(image, work):
         port.press("T1")
         back = cell(port, 0, 0, 0)
         reloaded = bar_phrase(play_timed(port, 4300))
+        port.enc("A",-4)
+        off_reloaded=bar_phrase(play_timed(port,4300))
+        check('After RELOAD, MODE OFF plays the exact saved WRITE trigs',off_reloaded==ref)
+        port.enc("A",4)
         print(f"    reload: before SAVE {ref}\n      written (OFF) {written}\n      after RELOAD {reloaded}")
         check("(5) SAVE while playing mid-pass, RELOAD: the cell's register is the one saved (the pass's first step)",
               (back["seeded"], back["bits"], back["on"], back["lock"], back["length"], back["density"])
@@ -2385,6 +2401,10 @@ def reload_run(image, work):
         rebooted = bar_phrase(play_timed(port, 4300))
         print(f"    reboot + load: {rebooted}")
         check("(5) reboot + load: the identical locked phrase from the same step", rebooted == ref, f"{rebooted}\n{ref}")
+        open_turing(port)
+        port.enc("A",-4)
+        off_booted=bar_phrase(play_timed(port,4300))
+        check('Fresh saved-card boot, MODE OFF plays the exact saved WRITE trigs',off_booted==ref)
     finally:
         port.quit()
     check("(6) the track keys select tracks after WRITE, SAVE and RELOAD while playing and after a boot load",
