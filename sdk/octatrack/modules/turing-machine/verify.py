@@ -1743,7 +1743,7 @@ def loop_register(rnd, length, density):
 
 def live_length_run(image, work):
     """(c) as on the hardware, the panel alone: a fresh pattern (fixed test seed), MODE ON at the defaults, PLAY;
-    FUNC + LOCK to 127 and DENS to 127 while playing; LEN turned live 16 -> 4 -> 2 -> 3 -> 5 -> 8 -> 7 -> 16, each
+    plain LOCK to 127 and DENS to 127 while playing; LEN turned live 16 -> 4 -> 2 -> 3 -> 5 -> 8 -> 7 -> 16, each
     for 64 steps at 2X. On the wire: each LEN's notes repeat with period LEN and play more than one note (OCTABAM10:
     a 2-bit loop of 00 or 11 is one note, and it filled the whole register with it), and the last LEN 16 plays
     notes from across the range."""
@@ -2602,4 +2602,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # The package gate uses the current base/backend harness. main() above
+    # retains the historical all-in-one route for reference callers.
+    from emulator_test import main as module_main
+    module_main()

@@ -44,7 +44,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ('base','package','native','emulator','output'):
         parser.add_argument('--'+name,type=Path,required=True)
-    parser.add_argument('--runs',default='func,storage,s2,migration,replace,locks,nei,range,lfo,clock,model,lock,live,fresh,scale,density,write,flags,toggle,pattern,timer,reload,oldlines')
+    parser.add_argument('--runs',default='stock,func,storage,s2,migration,replace,locks,nei,range,lfo,clock,model,lock,live,fresh,scale,density,write,flags,toggle,pattern,timer,reload,oldlines')
     parser.add_argument('--reference-image',type=Path)
     parser.add_argument('--reference-arpgen',type=Path)
     args = parser.parse_args()
@@ -53,6 +53,7 @@ def main():
     args.output.mkdir(parents=True,exist_ok=True)
     a = load('turing_arpgen_gate',HERE/'verify_arpgen.py')
     v = a.v
+    v.STOCK = args.native / "out/raw/section_3_MAIN_OS.bin"
     base = json.loads((args.base/'symbols.json').read_text())
     package = args.package.read_bytes()
     offsets = module_symbols(package)

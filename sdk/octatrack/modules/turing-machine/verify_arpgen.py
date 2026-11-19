@@ -541,6 +541,26 @@ def reference_arpgen_run(image,work,reference):
             len(phrases)==2 and phrases[0]==phrases[1] and all(len(p)==32 for p in phrases[1]),str(phrases))
 
 
+def stock_contract_run(image,work):
+    """The historical MODE-OFF messages and transport/ISR checks, unchanged."""
+    work.mkdir()
+    ours=v.stock_run(image,work/'ours',True)
+    stock=v.stock_run(v.STOCK,work/'stock',False)
+    full=lambda w: [m[1:] for m in v.messages([(0,x) for x in w])]
+    v.check('MODE OFF: MIDI OUT messages identical to stock 1.40C (running status written out)',
+            full(ours[0])==full(stock[0]) and len(full(stock[0]))>50,
+            f'{len(full(ours[0]))} vs {len(full(stock[0]))} messages')
+    count=lambda w: v.collections.Counter(x for x in w if x>=0xf8)
+    o,k=count(ours[1]),count(stock[1])
+    v.check('T1 ON, CLOCK SEND: F8 as stock, one FA and one FC',
+            abs(o[0xf8]-k[0xf8])<=1 and k[0xf8]>100
+            and o[0xfa]==k[0xfa]==1 and o[0xfc]==k[0xfc]==1,f'ours {dict(o)} stock {dict(k)}')
+    v.check('T1 ON, CLOCK SEND: sequencer tick ISRs as stock',
+            abs(ours[2]-stock[2])<=1 and stock[2]>300,f'ours {ours[2]} stock {stock[2]}')
+    v.check('T1 ON, CLOCK SEND: T1 plays one note a step, as many as T2',
+            len(v.track_ons(v.notes(ours[1]),0))==len(v.track_ons(v.notes(ours[1]),1))>=16)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('image_file', type=Path, nargs='?')
@@ -551,7 +571,7 @@ def main():
     parser.add_argument('--reference-image', type=Path)
     parser.add_argument('--reference-arpgen', type=Path)
     parser.add_argument('--output', type=Path)
-    parser.add_argument('--runs', default='func,storage,s2,migration,replace,locks,nei,range,lfo,clock,model,lock,live,fresh,scale,density,write,flags,toggle,pattern,timer,reload,oldlines')
+    parser.add_argument('--runs', default='stock,func,storage,s2,migration,replace,locks,nei,range,lfo,clock,model,lock,live,fresh,scale,density,write,flags,toggle,pattern,timer,reload,oldlines')
     args = parser.parse_args()
     args.image = args.image or args.image_file or args.native / 'out/mainos_bus.bin'
     args.emulator = args.emulator or Path(os.environ.get('TM_EMULATOR',args.native / 'out/emu/ot_emu'))
@@ -567,7 +587,7 @@ def main():
     v.elf_symbol = lambda name: symbols['turing-machine:' + name]
     v.SETTINGS, v.TEST_SEED, v.RANDOM, v.CELLS = (v.elf_symbol(n) for n in
         ('tm_settings', 'tm_test_seed', 'tm_random_states', 'tm_cells'))
-    runs = {'reference': lambda i,w: reference_arpgen_run(i,w,args.reference_arpgen), 'func': func_contract_run, 'storage': storage_run, 's2': s2_run, 'migration': migration_run,
+    runs = {'stock': stock_contract_run, 'reference': lambda i,w: reference_arpgen_run(i,w,args.reference_arpgen), 'func': func_contract_run, 'storage': storage_run, 's2': s2_run, 'migration': migration_run,
             'key': lambda i,w: key_reference_run(i,w,args.reference_image),
             'replace': v.replace_run, 'locks': v.locks_run, 'nei': v.nei_run,
             'range': v.range_run, 'lfo': v.lfo_run, 'clock': v.clock_run, 'live': v.live_length_run,
