@@ -582,12 +582,14 @@ static unsigned tm_on(uint32_t bank, uint32_t pattern, uint32_t track);
 
 /* Chord ownership is module state, never another module's saved lock bytes. */
 int32_t tm_fired(uint32_t track) {
-    if (tm_note_claims(track)) {
+    unsigned owned = track < TM_TRACKS && tm_scheduled[track];
+    if (owned || tm_note_claims(track)) {
         BYTE(0x46c76dc0u + 0x44u * track + 14u) = 0;
         BYTE(0x46c76fe0u + 32u * track + 14u) = 0;
     }
-    return track < TM_TRACKS && tm_scheduled[track] && tm_note_claims(track) &&
-           tm_on(BYTE(TM_UI_BANK), BYTE(TM_UI_PATTERN), track);
+    /* The next pattern/Part can already be current when the last queued
+     * step fires. Its ownership belongs to the evaluated step, not the UI. */
+    return owned;
 }
 
 /* ---- REPLACE mode: one Turing step per step ---------------------------------
@@ -686,7 +688,7 @@ static unsigned tm_centre(const volatile uint8_t *record, uint32_t track, uint32
 
 /* A Turing step's record: stock's locks when stock scheduled the step
  * (locks != 0 or stocked), else none; for a note step the register's note
- * as its NOTE lock; the tag. The register advances here (tm_position), and
+ * as its NOTE lock; ownership stays in module state. The register advances here (tm_position), and
  * the track's condition result is set (true for a note). Nonzero for a note
  * step. */
 static unsigned tm_turing_record(volatile uint8_t *record, const uint8_t *locks, unsigned stocked,
@@ -726,6 +728,7 @@ int32_t tm_eval(uint32_t track, uint32_t bank, uint32_t pattern, uint32_t step, 
     tm_config(tm_cell(bank, pattern, track), &config);
     unsigned on = config.on;
     if (slot < 0) {
+        tm_scheduled[track] = 0;
         TmFirst *f = &tm_first_steps[track];
         volatile uint8_t *record = (volatile uint8_t *)(TM_EV_RECORD_FIRST + track * 32u);
         tm_drop(track);

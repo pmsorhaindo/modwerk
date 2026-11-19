@@ -91,7 +91,7 @@ class Runtime(unittest.TestCase):
     def test_akl_b_locrian_cannot_claim_a_non_turing_chord(self):
         self.cell(on=False)
         self.uc.mem_write(0x46c7a01e,b'\x54\xff')
-        self.uc.mem_write(self.symbols['tm_scheduled'],b'\x01')
+        self.call('tm_eval',0,0,0,0,0)
         self.assertEqual(self.call('tm_fired',0)[0],0)
         self.uc.mem_write(PART+0x1822,b'\0\0');self.cell(on=True)
         self.assertEqual(self.call('tm_fired',0)[0],0)
@@ -102,6 +102,22 @@ class Runtime(unittest.TestCase):
         self.uc.mem_write(0x70003ffc,bytes((48,55,60,64)))
         self.uc.emu_start(self.symbols['tm_chord_hook'],0x4009fa30,count=4000)
         self.assertEqual(self.uc.mem_read(0x70003ffc,4),bytes((48,55,60,64)))
+
+    def test_queued_turing_ownership_survives_a_pattern_or_part_change(self):
+        # Last ON step is already scheduled when the next OFF pattern/Part
+        # becomes current. It must still suppress the stock chord notes.
+        self.call('tm_eval',0,0,0,15,0)
+        self.uc.mem_write(0x800065be,b'\x01')
+        self.uc.mem_write(PART+0x1822,b'\0\0')
+        self.assertEqual(self.call('tm_fired',0)[0],1)
+        # Evaluating the next stock step retires that ownership, even if AKL
+        # supplies the formerly colliding B-Locrian KEY byte.
+        self.call('tm_eval',0,0,1,0,0)
+        self.uc.mem_write(0x46c7a01e,b'\x54\xff')
+        self.assertEqual(self.call('tm_fired',0)[0],0)
+        self.uc.mem_write(self.symbols['tm_scheduled'],b'\x01')
+        self.call('tm_eval',0,0,1,0,-1)
+        self.assertEqual(self.call('tm_fired',0)[0],0)
 
     def test_write_preserves_akl_and_commits_mirror_dirty_and_index(self):
         locks=BANK+0x4900
@@ -183,6 +199,7 @@ class Runtime(unittest.TestCase):
         self.call('tm_knob',1,1)
         self.assertEqual((self.uc.mem_read(PART+0x1832,1)[0]+64)&127,10)
         self.assertEqual((self.uc.mem_read(PART+6322+0x1832,1)[0]+64)&127,91)
+        self.assertEqual(self.calls.get(0x40027e00),1)
 
     def test_worst_catch_up_instruction_counts_for_all_eight_tracks(self):
         maxima=[]
