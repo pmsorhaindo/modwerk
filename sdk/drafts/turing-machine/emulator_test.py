@@ -7,6 +7,7 @@ Historical comparison images are read-only and keep their own UI adapters.
 """
 import argparse
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 import struct
@@ -105,6 +106,14 @@ def main():
             assert record and self.peek(record,4) == package[28:32], 'Kept Turing was not restored'
             descriptor=int.from_bytes(self.peek(record+8+4*31,4),'big')
             origin=descriptor-offsets['tm_generator']
+            if restore_only:
+                # A matching module ID is not an exact-build check: an older
+                # Kept version can have the same ID but different offsets.
+                # This paused emulator query reads the base's immutable owner.
+                scratch=0x41010000
+                assert invoke(base['modwerk_runtime_owner_snapshot'],origin,scratch)==1
+                assert self.peek(scratch+24,32)==hashlib.sha256(package).digest(), \
+                    'Kept package differs from the acceptance artifact'
             resolved={k:origin+value for k,value in offsets.items()}
             self.module_symbols=resolved
             v.elf_symbol=lambda name: resolved[name] if name in resolved else base[name]
