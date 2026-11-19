@@ -352,7 +352,7 @@ def pattern_run(image, work):
                  and all(n==(v.NOTE_C3,v.NOTE_C3+7) for _,n in bar) else '?' for bar in bars]
         joined = ''.join(k[-1] for k in kinds)
         v.check('Pattern changes alternate Turing and stock bars, with no mixed bar',
-                '?' not in kinds and '121' in joined and joined.startswith('1'),str(kinds))
+                '?' not in kinds and '121' in joined and joined.startswith('1'),str((kinds,bars)))
         generated = [[n[0] for _,n in bar] for bar,k in zip(bars,kinds) if k=='A01']
         model = v.Model(0x13572468,0)
         expected = [[model.note(127,16) for _ in range(16)] for _ in generated]
@@ -537,15 +537,24 @@ def reference_arpgen_run(image,work,reference):
             # Exercise flips, byte-note loops, rests and pitch-range extremes.
             # Both actual firmwares receive the same explicit register/RNG.
             for lock,length,span in ((25,5,0),(25,7,127),(64,5,127),(64,7,0)):
+                page_tracks(port,{1:(True,lock,length,span,64)})
+                port.press('FUNC','AMP')
                 prior=port.peek(part+0x1832+4,2)
-                port.cmd(f'poke {part+0x1832+4:#x} c0c0')
+                old_scale,old_root=((x+64)&127 for x in prior)
+                port.enc('A',-old_scale);port.enc('B',-old_root);port.press('NO')
+                # MODE's panel cycle above retires any live register from the
+                # previous length. Seed the anchor AND RNG only after that.
                 poke_cell(port,0,0,0,True,lock,length,(0x12345678beef0001,0x13572469),span,64)
+                config=cell(port,0,0,0)
+                v.check(tag+f' unlocked fixture {lock}/{length}/{span}/64 active',
+                        (config['on'],config['lock'],config['length'],config['scale'],config['density'],config['bits'])
+                        ==(1,lock,length,span,64,0x12345678beef0001),str(config))
                 v.watch_midi_out(port)
                 events=v.play_timed(port,4300)
                 own,grid=v.grid_steps(events,0,1)
                 phrase=tuple((i,*own[i]) for i in sorted(own) if i<32)
                 v.check(tag+f' unlocked LOCK {lock} LEN {length} SCAL {span} DENS 64 has notes and rests',
-                        grid>=32 and 0<len(phrase)<32)
+                        grid>=32 and 0<len(phrase)<32, f'grid={grid} phrase={phrase} config={cell(port,0,0,0)}')
                 captured.append(phrase)
         finally:
             port.quit()
@@ -609,14 +618,30 @@ def review_run(image,work):
         open_turing(port)
         part=current_part(port)
         state=(0x12345678beef0001,0x13572469)
+        open_turing(port);port.enc('A',-4);port.enc('A',4)
         poke_cell(port,0,1,0,True,127,16,state,64,127)
-        v.watch_midi_out(port);before=v.track_ons(v.play(port,4300),0)
+        print('TRAN fixture pre-PLAY:',port.peek(0x800065bd,2).hex(),cell(port,0,1,0),
+              'Part SRC',port.peek(part+0x3e2,18).hex(),flush=True)
+        v.watch_midi_out(port);port.wire()
+        first_events=v.play_timed(port,4300)
+        first_wire=port.wire()
+        before=[n for _,n,_ in v.onsets(first_events,0)]
+        print('TRAN before timed notes:',v.onsets(first_events,0),flush=True)
+        print('TRAN before UART wire:',first_wire.hex(),flush=True)
+        print('TRAN before wire notes:',v.track_ons(v.notes(first_wire),0),flush=True)
         port.key('FUNC',True,60);port.enc('A',1);port.key('FUNC',False,60)
         changed=port.peek(part+0x3e2+12,1)[0]
         v.check('Held FUNC edits stock TRAN and leaves Turing Part settings unchanged',
                 changed==trans+1 and port.peek(part+0x1832,16)==settings)
+        open_turing(port);port.enc('A',-4);port.enc('A',4)
         poke_cell(port,0,1,0,True,127,16,state,64,127)
-        v.watch_midi_out(port);after=v.track_ons(v.play(port,4300),0)
+        v.watch_midi_out(port);port.wire()
+        after_events=v.play_timed(port,4300)
+        after_wire=port.wire()
+        after=[n for _,n,_ in v.onsets(after_events,0)]
+        print('TRAN after timed notes:',v.onsets(after_events,0),flush=True)
+        print('TRAN after UART wire:',after_wire.hex(),flush=True)
+        print('TRAN after wire notes:',v.track_ons(v.notes(after_wire),0),flush=True)
         v.check('Held-FUNC TRAN transposes the fixed generated phrase by one semitone',
                 len(before)>=32 and after==[n+1 for n in before],f'{before[:8]} / {after[:8]}')
     finally:

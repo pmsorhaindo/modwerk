@@ -722,7 +722,13 @@ def lockstep(t1, ref):
 
 def watch_midi_out(port):
     ring = int.from_bytes(port.peek(RING_PTR, 4), "big")
-    port.cmd(f"watchmem 0x{ring:08x} 4096")
+    # ot_emu adds watch ranges; registering the same ring twice duplicates
+    # every byte and corrupts MIDI running-status decoding on later PLAYs.
+    watched = getattr(port, "midi_watched_rings", set())
+    if ring not in watched:
+        port.cmd(f"watchmem 0x{ring:08x} 4096")
+        watched.add(ring)
+        port.midi_watched_rings = watched
 
 
 def released(events):
