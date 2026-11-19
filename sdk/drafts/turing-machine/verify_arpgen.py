@@ -668,6 +668,50 @@ def review_run(image,work):
         port.quit()
 
 
+def project_change(port, work):
+    """Normal UI change; T2 is legacy, T1 already owns retained S2 settings."""
+    import lcd_view
+    def capture(name):
+        data=port.peek(0x46c7e0ea,1024)+port.peek(0x46c7d34c,280)
+        data+=b''.join(port.peek(0x460d1f7b+i,min(4096,0x2800-i)) for i in range(0,0x2800,4096))
+        lcd_view.png(lcd_view.screen(data),work/(name+'.png'))
+    v.project_menu(port,0);capture('change-list')
+    port.press('DOWN');port.press('YES');port.run(500);capture('change-answer')
+    v.settle_card(port,at_least_ms=20000);port.press('NO');port.run(500)
+    capture('change-loaded')
+    pointer=int(port.cmd('call 0x40025230 0 0').split('d0=')[1],16)
+    directory=port.peek(pointer,256).split(b'\0',1)[0]
+    v.check('PROJECT CHANGE selected the second saved project',directory.endswith(b'PROJECT 000001'),repr(directory))
+    got=cell(port,0,0,1)
+    v.check('PROJECT CHANGE imports and migrates legacy T2 settings',
+            (got['on'],got['lock'],got['length'],got['scale'],got['density'])==(1,100,5,64,127),str(got))
+    retained=cell(port,0,0,0)
+    v.check('PROJECT CHANGE preserves already-selected T1 Part settings',
+            (retained['lock'],retained['length'],retained['scale'],retained['density'])==(127,8,64,127),str(retained))
+
+
+def change_run(image, work, kept_tree):
+    """Repeat normal project change from a real saved-set writer fixture."""
+    import shutil
+    work.mkdir();tree=work/'tree';shutil.copytree(kept_tree,tree)
+    current=next(f.parent for f in tree.rglob('*') if f.name.lower()=='project.work' and f.parent.name=='PROJECT 000000')
+    (current.parent/'AUDIO').mkdir(exist_ok=True)
+    legacy=current.parent/'PROJECT 000001'
+    saved=next(f for f in legacy.iterdir() if f.name.lower()=='project.work')
+    text=saved.read_text(encoding='latin1')
+    text='\r\n'.join(line for line in text.splitlines() if not line.startswith('#TURING_'))+'\r\n#TURING_T2=1,100,5\r\n'
+    saved.write_bytes(text.encode('latin1'))
+    port=v.Port(image,work/'boot',tree=tree,card_megabytes=128,restore_only=True,
+                extra=('--mount','--set',current.parent.name,'--project',current.name))
+    try:
+        v.check('Cached real Kept set restores exact package without reinstall or manual wake',
+                call(port,'modwerk_runtime_active')==1
+                and int.from_bytes(port.peek(v.elf_symbol('tm_ready_events'),4),'big')>=1)
+        v.mounted_startup(port)
+        project_change(port,work)
+    finally:port.quit()
+
+
 def lifecycle_run(image,work,kept_tree,legacy_tree):
     """Real card writer, natural Kept restore, then PROJECT CHANGE to legacy.
 
@@ -719,7 +763,9 @@ def lifecycle_run(image,work,kept_tree,legacy_tree):
     shutil.copytree(project(legacy_tree),legacy)
     saved=next(f for f in legacy.iterdir() if f.name.lower()=='project.work')
     text=saved.read_text(encoding='latin1')
-    text='\r\n'.join(line for line in text.splitlines() if not line.startswith('#TURING_'))+'\r\n#TURING_T1=1,100,5\r\n'
+    # T1 is already selected in the supplied saved Part. Keep its settings;
+    # exercise legacy migration on the previously unselected T2 instead.
+    text='\r\n'.join(line for line in text.splitlines() if not line.startswith('#TURING_'))+'\r\n#TURING_T2=1,100,5\r\n'
     saved.write_bytes(text.encode('latin1'))
     # restore_only forbids backend publication and queue wake; the normal
     # base startup must restore the set and deliver modules-ready itself.
@@ -736,14 +782,7 @@ def lifecycle_run(image,work,kept_tree,legacy_tree):
         v.midi_mode(port);v.watch_midi_out(port)
         after=v.bar_phrase(v.play_timed(port,4300))
         v.check('Kept-set fresh boot retains the exact saved phrase',after==before and bool(before))
-        v.project_menu(port,0);port.press('DOWN');port.press('YES')
-        v.settle_card(port,at_least_ms=20000);port.press('NO');port.run(500)
-        pointer=int(port.cmd('call 0x40025230 0 0').split('d0=')[1],16)
-        directory=port.peek(pointer,256).split(b'\0',1)[0]
-        v.check('PROJECT CHANGE selected the second saved project',directory.endswith(b'PROJECT 000001'),repr(directory))
-        got=cell(port,0,0,0)
-        v.check('PROJECT CHANGE imports and migrates legacy settings',
-                (got['on'],got['lock'],got['length'],got['scale'],got['density'])==(1,100,5,64,127),str(got))
+        project_change(port,work)
     finally:port.quit()
 
 
@@ -776,7 +815,7 @@ def main():
     v.elf_symbol = lambda name: symbols['turing-machine:' + name]
     v.SETTINGS, v.TEST_SEED, v.RANDOM, v.CELLS = (v.elf_symbol(n) for n in
         ('tm_settings', 'tm_test_seed', 'tm_random_states', 'tm_cells'))
-    runs = {'lifecycle':lambda i,w:lifecycle_run(i,w,args.kept_tree,args.legacy_tree),'review': review_run, 'stock': stock_contract_run, 'reference': lambda i,w: reference_arpgen_run(i,w,args.reference_arpgen), 'func': func_contract_run, 'storage': storage_run, 's2': s2_run, 'migration': migration_run,
+    runs = {'projectchange':lambda i,w:change_run(i,w,args.kept_tree),'lifecycle':lambda i,w:lifecycle_run(i,w,args.kept_tree,args.legacy_tree),'review': review_run, 'stock': stock_contract_run, 'reference': lambda i,w: reference_arpgen_run(i,w,args.reference_arpgen), 'func': func_contract_run, 'storage': storage_run, 's2': s2_run, 'migration': migration_run,
             'key': lambda i,w: key_reference_run(i,w,args.reference_image),
             'replace': v.replace_run, 'locks': v.locks_run, 'nei': v.nei_run,
             'range': v.range_run, 'lfo': v.lfo_run, 'clock': v.clock_run, 'live': v.live_length_run,
