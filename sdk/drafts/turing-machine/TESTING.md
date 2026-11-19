@@ -1,74 +1,71 @@
-# Turing Machine 0.5.0-experimental — private software qualification
+# Turing Machine 0.5.1-experimental — local review qualification
 
-**Hardware untested / #1697 draft.** No physical USB write, flash, MIDI send, listening or reboot was performed. These observations apply to the module-only package on the unchanged Modwerk base **0.7.9**, built privately from stock OS **1.40C**. Base 0.7.7 and later base versions were not qualified. The previous turing-arpgen implementation is a read-only reference, not hardware evidence for this port.
+**Hardware untested / #1697 draft.** These are software observations on the unchanged Modwerk base **0.7.9**, stock OS **1.40C**, in ot_emu MKII mode. No physical USB, MIDI, flash, listening or power-cycle test was performed. Neither base 0.7.7 nor MKI hardware is qualified. Later bases are untested. The numeric base version is a support boundary, not a version field enforced by the package protocol.
 
-Michael approved retiring FUNC+LOCK and releasing FUNC after FUNC+AMP before editing SCALE/ROOT on 18 November 2026 (`ANSWERS24.md`, private Brief 24 diagnostics). All other note, engine, storage and WRITE assertions retain their reference expectations. Saved SCALE IDs remain OFF/MAJ/MIN, mapped to shared SDK IDs 0/1/6; the negative down-snap at note zero is dropped.
+The module lives in `sdk/drafts/turing-machine/`; its draft release notes are `CHANGELOG.json`. No catalogue entry or distribution package is published. Michael accepted behavioural stock-FX equivalence versus 1.40C on 19 November 2026, 17:13 CET. The approved FUNC rules remain: no FUNC+LOCK shortcut, release FUNC after FUNC+AMP before SCALE/ROOT edits, stock host unchanged. No fixed-seed note difference is approved.
 
-## Exact private package
+## Exact acceptance build
 
-The tested local artifact is `../diag/out/brief24/turing24.mwrm`, outside this worktree. It contains **43,708 initialized bytes + 4,536 BSS = 48,244 bytes (47.1 KiB)**, 163 relocations, three table/event hooks and nine stock-code sites. It is below the 128 KiB initialized-image and 288 KiB total per-module caps; this is not a measurement of loader overhead or whole-set headroom.
+The documented command `npm run module:dev -- turing-machine --build-only --out /private/review-turing24.mwrm` built the acceptance artifact, title **Turing Machine**, using the installed, read-only native toolchain. Local evidence is under `../diag/out/brief24/`; no firmware, binary, card, dump or extracted stock data is committed.
 
-Every package-harness boot links current `turing.s` and the shared scale SDK and asserts equality of the executable image, BSS and relocation count before installation. The build-only reproduction `turing24-reproduction.mwrm` differs solely in the 16-byte display title (`TURING` versus `Turing Machine`); all remaining bytes match. Acceptance uses the original artifact throughout. No binary, card, dump or image digest is committed or uploaded.
+`review-build-final.log`: **19,860 initialized bytes + 162,384 BSS = 182,244 bytes (178.0 KiB)**, 246 relocations, three table/event hooks and nine code sites. This is below the 128 KiB initialized-image and 288 KiB total caps; loader overhead and whole-set headroom are unmeasured. The package harness links the committed assembly and shared scale SDK and asserts exact initialized-image bytes, BSS size and relocation count before every acceptance boot. Explicit zero tables now reside in BSS, which the runtime loader clears. `manifest.py` remains the build recipe for the module package; it does not qualify the superseded all-in-one card route.
 
-## Observed results
+The executed source revision is `7b74656e5` (legacy WRITE compatibility included). Subsequent assembly comments do not change the executable image. Harness and documentation revisions are recorded separately in the private review response.
 
-Evidence is local under `../diag/out/brief24/`; `../diag/CODEX_REPORT24.md` holds the full gate ledger. An interrupted log counts only for its completed assertions.
+## Review observations
 
-| Check | Observation | Local evidence |
+A full ledger with exit status and interrupted attempts is in the private `CODEX_REPORT24.md` and `REVIEW24_RESPONSE.md`. Logs below have the prefix `review-`. Pending rows are not passes.
+
+| Gate | Observation | Local evidence |
 | --- | --- | --- |
-| Fixed-seed C engine versus turing-arpgen | PASS: 3,870,720 state transitions and three note ranges each | `port-native.log` |
-| Executed ColdFire shared scale wrapper | PASS: 4,680 OFF/MAJ/MIN and range-edge cases | `port-native.log` |
-| Actual candidate/reference UART output | PASS: 32 notes/velocities per key, OFF and four MAJ/MIN keys; 25 assertions | `reference.log` |
-| Stock host UI / S2 controls | PASS: 14 assertions, main controls, second-page SCALE/ROOT after releasing FUNC, per-Part settings and stock SRC | `wake-smoke.log` (corrected harness, exit 0); earlier `smoke2.log` |
-| DRAM reset/import and former battery isolation | PASS: storage and migration assertions, including private-emulator sentinel preservation | `persist.log`, `storage-source-audit.log` |
-| Stock 1.40C MIDI contract | PASS: MODE-OFF message identity, clock/transport, tick counts and one generated note per step; four contract assertions plus two fixtures, exit 0 | `wake-stock.log` (corrected harness, exit 0); earlier `resume-stock.log` |
-| Pattern/Part state and timer seeding | PASS: 12 assertions, distinct phrases at different PLAY times, exit 0 | `resume-shape-tail.log` |
-| Live LEN and fresh registers | PASS: eight assertions, live changes and four tracks × four patterns match the model, exit 0 | `resume-shape-live.log` |
-| WRITE PUSHA / flags / repeated toggles | PASS: message equality, four-sample timing tolerance and live transition; historical trig structure byte-identical; all seven resumed flags/toggle checks pass, exit 0 | `write.log`, `resume-write.log` |
-| SCAL / density | PASS: 14 assertions, including model/range/quantizer, rests/NEI/CC and live rhythm restoration, exit 0 | `resume-shape-scale.log` |
-| LOCK / LEN periods | PASS: eight assertions, curve/clamps and exact note and notes/rests periods, exit 0 | `resume-lock.log` |
-| Grid/locks/NEI/range/LFO/clock/models | PASS: 42 completed replacement checks, 16 resumed locks/NEI/range/LFO checks and 15 clock/model checks; clock run exit 0. Sequential engine run intentionally partitioned after LFO closed, before clock; zero failed assertions | `engine.log`, `resume-engine.log`, `partition-engine.log`, `resume-clock.log` |
-| SAVE/RELOAD and saved-card fresh boot | PASS: seven unchanged strict assertions, exit 0; exact saved pass-start register/MODE/Part settings, identical phrase after RELOAD and fresh boot, and track keys after WRITE/SAVE/RELOAD/boot | `run12-reload.log`, `run12-reload.exit` |
-| Cached legacy-file import | PASS: two unchanged strict assertions, exit 0; OCTABAM8/9 comments, shared Part controls and independent pattern MODE | `wake-oldlines.log`, `wake-oldlines.exit` |
-| Browser package admission | PASS: validator accepts the package, prepares exact Undo and rejects corruption; no transport used | `package-admission.log` |
-| Runtime backend lifecycle | PASS: 18 assertions, installation/replacement/Undo/removal and retained Part state | `beta.log` |
-| Declared cross-compatibility | PASS: 43 modules, 903 pairs, 104 hooks; no concurrent-module audio claim | `compat.log` |
-| Focused SDK and late-project import | PASS: ten focused tests and one import test | `sdk-focused.log`, `import-native.log` |
-| Full SDK suite | PASS: 721 tests / 127 jobs with Python 3.15 | `sdk-check-current-python.log` |
-| ColdFire ISA / hooks / stock inbound references | PASS: 91 ISA sources, 12 pre-existing unsupported-source skips; six hook tests; all nine Turing sites have zero interior inbound references | `coldfire-isa.log`, `hook-coverage.log`, `inbound.log` |
-| module:doctor / pr:ready | NOT GREEN: publication/catalogue/package/board records and CPU/UI/hardware evidence missing; nothing waived | `doctor.log`, `pr-ready.log` |
+| Fixed-seed C engine | PASS: 3,870,720 transitions, three note ranges per transition, versus read-only turing-arpgen | `review-port-native.log` |
+| Linked ColdFire note-key entry | PASS: 4,644 signed-byte inputs across OFF/MAJ/MIN and all roots, executing the shipped inlined wrapper. The separate shared wrapper also passes 4,680 inputs including 128. | `review-runtime.log`, `review-port-native.log` |
+| Ownership, WRITE, UI and load races | PASS: ten executed ColdFire tests, including AKL 84, unchanged lock bytes 30/31, owned centre serialization, stock mirror/edited/index contract, covered window, divergent displayed/playing Parts, failed load and migration generation interleavings | `review-runtime.log` |
+| Late importer | PASS: chunk/partial/final-newline parsing, transient directory/open/read retries, and rejection of superseded-project text/completion | `review-import.log` |
+| Fixed-seed firmware reference | Rerun in progress: OFF/four keys plus four unlocked LEN 5/7, DENS 64, SCAL 0/127 cases | `review-reference-final.log` |
+| UI / S2 / stock MIDI | PASS: corrected backend-wake harness, 14 UI/S2 and six stock fixture/contract assertions, exit 0; MODE-OFF messages, clock/transport, tick and track-step counts | `review-wake-smoke.log` |
+| AKL coexistence and held-FUNC TRAN | Rerun in progress: AKL non-Turing four-note chords, WRITE preserves AKL KEY/shift, covered NOTE SETUP, actual TRAN transposition | `review-coexist-final.log` |
+| SAVE / RELOAD / fresh saved-card boot | In progress: stronger gate clears the two edited flags after saving the fixture, proves WRITE alone sets them, and compares MODE-OFF written trigs after RELOAD and a fresh boot, alongside the original strict MODE-ON phrase checks | `review-reload.log` |
+| Natural Kept-set restore / PROJECT CHANGE | In progress: actual base card writer and plain boot, without backend reinstall or manual wake on the restoring boot | `review-lifecycle-v2.log` |
+| Paired FX after real modules-ready | PASS: all 26 complete arrays byte-identical before/after Turing; no FX word excluded | `review-fx-capture.log` |
+| Draft doctor | PASS: experimental checks green, exit 0; publication, CPU, screenshots and hardware requirements remain pending | `review-doctor.log` |
+| Repository check / PR readiness | Rerun after this ledger update. First review check correctly rejected the stale 0.5.0 TESTING heading. | `review-check.log` |
 
-## Stock FX
+The expanded reference initially decoded repeated bytes because ot_emu **adds** memory-watch ranges on each `watchmem`. Re-registering the same ring duplicates each queued byte and breaks MIDI running status. `watch_midi_out` now registers each ring once per port; raw UART output demonstrated the discrepancy. Failed/interrupted diagnostic logs are retained, not silently counted as passes. The strict musical assertions remain.
 
-**Paired Turing preservation: byte-identical. Original-stock comparison: normalized identity plus bounded compressor-bridge behavioural equivalence, not whole-FX byte identity.** All 26 complete arrays match before/after Turing installation on the same base 0.7.9 boot after the real modules-ready notification (`fx-before-after-wake.log`, exit 0). No FX word is excluded. Against original stock 1.40C, the base's existing COMPRESSOR bridges differ in four words per core, so the literal all-13 original-stock byte-identity gate is not met; it has not been waived. The exact browser base was booted and Turing installed through its real runtime backend before reading all 26 unpacked stock arrays and both DSP resident P blocks. Recovery fingerprint-checks the original 1.40C MAIN, both payloads, all original spans and all normalized recipes.
+## Sequencer cost
 
-Twelve complete effect arrays per core, including SPRING REV, and every shared DSP helper match their normalized stock reference. The original source spans are recovered exactly by reversing the named address adjustments. Absolute original FX addresses are not a valid comparison: this existing base relocates the effects and reconstructs core B from shared literals plus sparse differences.
+The linked instruction counter executes eight ON tracks with non-following catch-up to step 63. LEN 2/3/4/5/6/7 costs respectively **54,690 / 56,463 / 58,277 / 60,546 / 62,809 / 64,642** instructions across eight tracks, at most **8,151** on one track. Configuration is computed once per evaluated track, not twice. WRITE of 16 steps costs 11,749 module instructions. The isolated runner replaces the stock evaluator and edit-done routine with ABI stubs: these counts exclude firmware cost, interrupt interference and uncached bus latency. They are not hardware timing, CPU price or proof of real-time headroom.
 
-COMPRESSOR matches in 176/180 words per core. The remaining four are the base's existing guarded init/proc long JSR bridges, not padding and not a Turing edit. The exact captured dormant paths disassemble to branch/move/RTS sequences replaying stock's prefixes. Under the vendored DSP interpreter, all four core/entry cases match the displaced original prefix over 4,096 seeded states each (16,384 comparisons): ALU, address/modulo/offset registers, status, return/stack balance and X/Y memory. The unchanged remainder resumes with the same state. Turing carries no DSP contribution and cannot enable Sidechain's hook.
+## Stock FX: exactly what matches
 
-Evidence and reproducible private probes: `FX_EVIDENCE.md`, `stock-fx-qualified.log`, `stock-fx-bridge-qualified.log`, `fx-runtime-probe.py`, `qualify-stock-fx.mjs`, `fx-bridge-proof.cpp`. This proves software code equivalence with dormant hooks, not hardware audio, timing, or an identical instruction count. A second paired run after correcting the engine wake also passes (`fx-before-after-wake.log`, exit 0). All 26 complete stock arrays match before/after; all other P differences are limited to verified load-meter data and stock per-frame DMA-mask operands. No FX word is excluded. No base/FX source or asset was changed. Earlier fixed-address and incomplete-fill probes are retained as invalid comparison attempts, not product failures.
+**Before versus after Turing on base 0.7.9: byte-identical.** The paired `review-fx-capture.log` captures all 13 complete arrays on each DSP after the real modules-ready event. All 26 match, including COMPRESSOR and SPRING; no FX word is ignored. Resident-P differences in this pair are six core-A and three core-B meter words; no DMA-mask operand differs in this pair.
 
-## Reproduction
+**Base 0.7.9 versus original 1.40C: behaviourally identical in the bounded software proof, not wholly byte-identical.** Twelve arrays per core and the shared helpers match after documented relocation normalization. The base's existing COMPRESSOR bridge differs in four words per core (176/180 words match). The dormant bridge paths reproduce the displaced stock prefixes over 4,096 seeded machine states per core/entry, 16,384 comparisons, with equal registers, status, stack/return state and X/Y memory. The unchanged remainder resumes with equal state. `stock-fx-qualified.log`, `stock-fx-bridge-qualified.log` and `FX_EVIDENCE.md` hold that earlier proof; the base and its captured FX code are unchanged. Michael explicitly accepted this behavioural comparison. No hardware audible/timing or exhaustive-state equivalence is claimed.
 
-Use Node 24.22.2 for repository tooling, Python 3.11 with Unicorn for the module checks, and the installed ColdFire toolchain. The full current SDK suite used Python 3.15 because existing upstream f-string syntax fails under Python 3.11; that first tooling failure is retained in `sdk-check.log`.
+## State and compatibility
+
+LOCK/LEN/SCAL/DENS/SCALE/ROOT and the TURING choice use the stock Part and its mirror; they follow stock's Part persistence. MODE/register anchors and WRITE centres are module-owned DRAM plus saved-project comments. Unsaved DRAM state is lost on reinstall or power-cycle. Legacy WRITE centres are read only from W (87), outside valid AKL KEY 0..84; new WRITE never changes those shared bytes. Saved Part choice wins over old comments; FIRST is ignored. The stock arp is forced off for Turing, including fired MODE locks. AKL's key/shift locks remain intact and are inert while Turing owns that track. Encoder A push belongs to `key:PUSHA@MIDI AMP`; covered windows suppress it.
+
+The current guarded project/step/PLAY/chord/push detours are exclusive stock sites. Shared multi-subscriber project hooks, push callbacks and a per-step generator ABI require separate owner-reviewed base work; no base/host/FX patch is part of this port.
+
+## Reproduction and limits
+
+Use Node 24, the ColdFire toolchain, Python 3.11 plus Unicorn for linked tests, and Python 3.15 for the repository's current SDK suite. The module gate needs private stock/tooling paths; none is downloaded or redistributed.
 
 ```sh
-python3.11 -B sdk/octatrack/modules/turing-machine/generate.py --check
-TURING_REFERENCE_DIR=/path/to/read-only/turing-arpgen/sdk/octabam/modules/turing-machine \
-  python3.11 -B sdk/octatrack/modules/turing-machine/test_port.py -v
-python3.11 -u -B sdk/octatrack/modules/turing-machine/verify.py \
-  --base /private/diag/out/brief24/base079 \
-  --package /private/diag/out/brief24/turing24.mwrm \
-  --native /path/to/native-tooling --emulator /path/to/ot_emu \
-  --output /private/diag/out/brief24/new-run
+python3.11 sdk/drafts/turing-machine/generate.py --check
+TURING_REFERENCE_DIR=/read-only/turing-arpgen/sdk/octabam/modules/turing-machine \
+  python3.11 sdk/drafts/turing-machine/test_port.py -v
+python3.11 sdk/drafts/turing-machine/test_runtime.py -v
+python3.11 sdk/drafts/turing-machine/test_import.py -v
+python3.11 -u -B sdk/drafts/turing-machine/verify.py \
+  --base /private/base079 --package /private/review-turing24.mwrm \
+  --native /read-only/native-tooling --emulator /private/ot_emu \
+  --output /private/new-run
+npm run module:doctor -- --draft turing-machine
 ```
 
-The initial direct-backend harness did not post the inert engine-queue wake that the USB transport posts. On an otherwise idle fresh boot, the base's engine service therefore never raised modules-ready; MODE/register and legacy-import checks correctly failed (`resume-persist.log`). A direct diagnostic call proved the file parser could restore the exact state, but is not acceptance evidence. The corrected harness posts the base's own inert message to the stock engine queue, waits for the real idle/event path, and asserts module-ready initialization. `import-wake.log` observes the actual event and restored state without calling Turing directly. No module/base firmware changed; the corrected-harness UI/S2, stock MIDI, legacy-file and paired FX reruns pass at exit 0. The unchanged full reload gate also passes: seven assertions at exit 0 in `run12-reload.log`, including exact saved MODE/register state and phrase identity after a fresh boot. The interrupted `wake-reload.log` has no exit record and is not acceptance evidence.
+Every package-harness boot posts the transport's actual inert engine-queue wake after direct backend installation and checks the real modules-ready callback. That is an emulator backend fixture, not a physical USB run. A natural Kept-set restoring boot is tested separately. The startup allowance is 250 million instructions because this base exceeds ot_emu's older 50-million default. Acceptance uses the DSP interpreter, not the failed historical JIT experiment.
 
-All firmware boots use ot_emu's MKII mode. The package harness installs through the existing backend on every boot, including saved-card fresh boots. The startup instruction allowance is bounded at 250 million because this current base boots after approximately 53.48 million instructions; the old emulator default was 50 million. Acceptance uses the DSP interpreter. A faster JIT experiment failed the unchanged D-major playback assertion and is not qualifying evidence (`jit-probe.log`).
-
-## Unqualified and known behavior changes
-
-Physical USB enumeration/install/Keep/Undo/removal, whole-set hardware headroom, CPU price, audio, dense incoming traffic, Part/channel changes under load, physical power-cycle persistence and screenshots are **not tested**. Emulator state and UART observations do not establish these. No push, PR or upstream/board post was made.
-
-MODE/register anchors are per pattern/track in DRAM plus saved comments; LOCK/LEN/SCAL/DENS/SCALE/ROOT are shared per Part/track. Unsaved DRAM changes are lost on power-cycle or reinstall. Saved Part choice wins over legacy lines; FIRST is ignored. Old arp-MODE projects intentionally change because stock arp MODE is forced off, including fired MODE locks. WRITE remains encoder A push (`key:PUSHA@MIDI TURING`), not YES. No fixed-seed note difference is approved.
+Earlier 0.5.0 engine/LOCK/LEN/SCAL/density/WRITE/model/clock/legacy-file/backend lifecycle passes remain historical evidence only (`run12-reload.log`, `resume-*.log`, `beta.log`); they do not qualify changed 0.5.1 paths. Physical install/Keep/Undo/removal, CPU price, audio, dense traffic, Part/channel changes under load, physical persistence, whole-set headroom and screenshots remain **not tested**. No push, PR or upstream/board post was made.

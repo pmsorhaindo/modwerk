@@ -85,7 +85,7 @@ tm_load_entry_hook:
         jmp     0x400866f4
 
 | The loader's next-line continuation (0x4008822a), reached once per complete line
-| (comments, Scale Quantizer's lines and every stock key) with d3 -> the
+| (comments, module lines and every stock key) with d3 -> the
 | line, before the buffer is cleared.
         .global tm_load_line_hook
 tm_load_line_hook:
@@ -102,7 +102,7 @@ tm_load_line_hook:
         jsr     (%a0)
         jmp     0x40088230
 
-| The serializer 0x40088288, one block after Scale Quantizer's: the Turing
+| The serializer continuation after the base's project-write take site: Turing
 | lines go between PATTERN_CHANGE_AUTO_SILENCE_TRACKS and
 | PATTERN_CHANGE_AUTO_TRIG_LFOS (0x400888d2).
 | a4 = format, a3 = length, a2 = write, d2 = the line buffer, d3 = the file.
