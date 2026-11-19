@@ -1,10 +1,12 @@
 # Turing Machine
 
-Version: 0.5.0-experimental · author: [pmsorhaindo](https://github.com/pmsorhaindo).
+Version: 0.5.1-experimental · author: [pmsorhaindo](https://github.com/pmsorhaindo).
 Private fork draft, not a published or hardware-qualified module.
 
 MODE and register anchors live in module-owned DRAM and saved project comments. **SAVE before a power
-cycle or reinstall:** unsaved edits are lost. The module never reads or writes its former battery table,
+cycle or reinstall:** unsaved MODE, register anchors and WRITE-centre metadata are lost.
+LOCK/LEN/SCAL/DENS/SCALE/ROOT and the TURING choice live in the Part and follow stock Part persistence;
+they may outlive unsaved module DRAM. No new module-owned battery storage is used. The module never reads or writes its former battery table,
 settings, test-seed or RNG addresses; the base diagnostics log and FX map keep their own storage.
 This remains an experimental draft, with no hardware qualification.
 
@@ -15,7 +17,7 @@ The stock sequencer advances it on the track's steps, with the instrument's tran
 LOCK changes how often the loop mutates; LEN sets its length, SCAL its pitch range around NOTE, and DENS its rests.
 LEN 2–7 loops whole notes; LEN 8–64 loops bits. The engine and its random sequence retain the previous design.
 
-This version is a module-only USB runtime package for **Modwerk base 0.7.9 or later**, built from stock OS 1.40C. It replaces the arpeggiator.
+This version is a module-only USB runtime package for **Modwerk base 0.7.9** (the only tested base), built from stock OS 1.40C. It replaces the arpeggiator.
 SRC (NOTE/VEL/LEN), LFO, FX1 and FX2 stay stock. Every stock audio effect, including SPRING REV, is retained.
 The base and existing effect packages are unchanged. The old all-in-one/card build route is superseded.
 
@@ -35,7 +37,8 @@ The choice belongs to the **Part and MIDI track**. Close setup and press AMP.
 | Push A | WRITE the current phrase into ordinary trigs; turning A while pushed cancels WRITE | Pattern and track |
 
 FUNC+AMP opens page 2: **A SCALE** (OFF, MAJ, MIN), **B ROOT** (C–B); C–F are unused. **Release FUNC before editing SCALE/ROOT.** NO returns to page 1.
-The inherited FUNC+LOCK shortcut is retired; holding FUNC yields the page and encoders to stock.
+The inherited FUNC+LOCK shortcut is retired; holding FUNC yields the page and encoders to stock: A edits TRAN, which transposes generated notes,
+and C edits stock arp MODE (Turing forces the arp off). Release FUNC for Turing controls.
 The framework also toggles page 2 on an AMP double tap. WRITE works on the main page only; YES does not WRITE.
 Holding a trig or scene shows stock's page so its locks remain reachable.
 
@@ -59,7 +62,8 @@ No richer scales, root following, or one-note arp are implemented.
 5. STOP releases the sounding note. Choose OFF in NOTE SETUP to return that Part/track to stock operation.
 
 WRITE preserves the step's other locks, clears conditions/microtiming/retrigs and leaves MODE and the live register
-unchanged. It marks its NOTE centre in spare lock bytes 30–31, as before. Muting silences output while the register
+unchanged. WRITE centres live in Turing-owned RAM and `#TURING_WB...` project comments; lock bytes 30–31
+are preserved for Arp Key Locks. Muting silences output while the register
 continues following the track. New trigs, note-offs, channels, clock and transport remain stock's responsibility.
 
 ## MIDI messages and timing
@@ -68,7 +72,7 @@ Turing consumes no incoming MIDI messages and assigns no CCs or SysEx commands. 
 
 ## Compatibility and limitations
 
-Octatrack MKI/MKII, OS 1.40C. No hardware activity is authorized for this draft. Emulator results are not hardware
+OS 1.40C; software observations use the MKII-mode emulator. MKI and MKII hardware remain unverified. No hardware activity is authorized for this draft. Emulator results are not hardware
 or physical reboot evidence. USB install/Keep/Undo/removal and simultaneous-module qualification remain open.
 
 **Migration:** after a complete legacy project load, any enabled Turing pattern assigns its Part/track to TURING
@@ -85,8 +89,14 @@ KEY-only projects with matching shared settings should retain pitches; tests and
 arp note bytes are stock-visible: enabling the arp under stock uses a partial step mask and unusual note offsets.
 Keep the arp off there. The original KEY remains available to stock. No stock code or firmware is shipped here.
 
-Copying or clearing patterns does not copy or clear their separate Turing registers. Incoming MIDI, dense traffic,
+Copying or clearing patterns does not copy or clear their separate Turing registers or WRITE-centre metadata. Incoming MIDI, dense traffic,
 Part changes under load, runtime replacement, removal while playing, and physical reboot are not yet qualified.
+
+Generator ID **1** is the saved Turing format; do not reuse it. The guarded encoder-push,
+step-evaluator, PLAY and chord sites are exclusive to this package. Sharing those sites with a future
+generator needs owner-reviewed SDK/base hooks. Turing's note-key claim precedes Arp Key Locks;
+AKL's KEY and shift locks remain saved but do not transform notes while the Part chooses TURING.
+Other MIDI tracks retain AKL's behavior. WRITE is available only on the uncovered main MIDI AMP page.
 
 ## Tests and measurements
 
@@ -97,11 +107,12 @@ python3.11 -B sdk/drafts/turing-machine/generate.py --check
 npm run module:dev -- turing-machine --build-only --out /private/turing-machine.mwrm
 ```
 
-This command only builds. The private `.mwrm` uses the same package format and validator as the browser USB installer on base 0.7.9. It is not in the public catalogue: use the developer build/trial tools after exact-build hardware testing is authorized. Do not install this untested candidate on a unit as part of software verification.
+This command only builds. The package format has no semantic base-version floor: admission alone
+does not prove compatibility with 0.7.7 or any untested later base. Use only the documented target 0.7.9. The private `.mwrm` uses the same package format and validator as the browser USB installer on base 0.7.9. It is not in the public catalogue: use the developer build/trial tools after exact-build hardware testing is authorized. Do not install this untested candidate on a unit as part of software verification.
 
 `runtime.json` contributes to `ot_midi_generators` and subscribes to `ev_midi_note_key` and `ev_modules_ready`. The base hosts the generator page and quantizer event. On installation after a project has already loaded, the existing modules-ready event reads only Turing comments from `project.work`; normal SAVE/RELOAD keeps the stock project-file callbacks. No module-owned battery range is used.
 
-`test_port.py` compares fixed-seed register transitions and notes with the prior implementation when `TURING_REFERENCE_DIR` is supplied. Its scale check executes the actual shared SDK and wrapper on ColdFire. `emulator_test.py` installs the `.mwrm` through the real backend of a private browser-built base on every test boot, including saved-card fresh boots. `verify_arpgen.py` adapts the existing engine tests; only the explicitly retired FUNC UI expectations are replaced. The old reference worktree remains unchanged.
+`test_port.py` compares fixed-seed register transitions and notes with the prior implementation when `TURING_REFERENCE_DIR` is supplied. Its scale check executes the shared SDK and wrapper on ColdFire; `test_runtime.py` additionally sweeps the linked, inlined note-key entry and checks WRITE ownership, commit bookkeeping and load preemption. `emulator_test.py` installs the `.mwrm` through the real backend of a private browser-built base on every test boot, including saved-card fresh boots. `verify_arpgen.py` adapts the existing engine tests; the retired FUNC expectations and WRITE private-marker comparison are documented in TESTING.md; musical assertions are retained. The old reference worktree remains unchanged.
 
 See TESTING.md for commands, exact results and remaining gates. No chip-cycle, CPU-load or audible-output claim is made.
 
