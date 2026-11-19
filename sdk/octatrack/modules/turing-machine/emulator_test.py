@@ -95,7 +95,17 @@ def main():
             v.SETTINGS,v.TEST_SEED,v.RANDOM,v.CELLS=(resolved[n] for n in
                     ('tm_settings','tm_test_seed','tm_random_states','tm_cells'))
             (self.card.parent/'runtime-symbols.json').write_text(json.dumps({**base,**resolved},indent=2))
-            self.run(500)  # UI and the engine-task modules-ready import
+            # Direct backend calls omit the transport's engine-queue wake.
+            # Use its actual inert message (ep0.c), so the unmodified engine
+            # idle path restores the set, then raises modules-ready. A second
+            # wake covers a boot whose first service only finishes restoration.
+            wake = base['core:wake_message']
+            assert self.peek(wake, 4) == b'\xff\0\0\0'
+            for _ in range(2):
+                invoke(0x40000c3c, 0x460d17ce, wake)
+                self.run(500)
+            assert int.from_bytes(self.peek(resolved['tm_install_read_done'], 4), 'big') == 1, \
+                'The base engine did not deliver module-ready initialization'
     v.Port=InstalledPort
     sys.argv=[str(HERE/'verify_arpgen.py'),str(args.base/'MAIN.raw'),'--symbols',str(init_symbols),
               '--native',str(args.native),'--emulator',str(args.emulator),'--output',str(args.output),
