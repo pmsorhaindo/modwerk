@@ -125,11 +125,11 @@
     "recorded": "2026-11-19",
     "storage": {
       "label": "Runtime memory",
-      "display": "177.9 KiB",
-      "value": 182204,
+      "display": "178.0 KiB",
+      "value": 182252,
       "unit": "bytes",
       "method": "static",
-      "conditions": "19,820 initialized image bytes plus 162,384 bytes BSS in the documented draft build; includes module-owned WRITE-centre metadata. Within 128 KiB image and 288 KiB total caps. Hardware and whole-set headroom remain unmeasured.",
+      "conditions": "19,868 initialized image bytes plus 162,384 bytes BSS in the documented draft build; includes module-owned WRITE-centre metadata. Within 128 KiB image and 288 KiB total caps. Hardware and whole-set headroom remain unmeasured.",
       "source": "TESTING.md"
     },
     "processing": {
@@ -138,7 +138,7 @@
       "value": null,
       "unit": "unknown",
       "method": "unmeasured",
-      "conditions": "No measurements exist yet. Add exact conditions and source evidence when available.",
+      "conditions": "Hardware CPU/DSP load is unmeasured. TESTING.md records bounded module instruction counts, excluding firmware cost, uncached bus latency and interrupt interference.",
       "source": "TESTING.md"
     }
   },
@@ -147,11 +147,12 @@
     "summary": "Hardware untested / #1697 draft. Software observations on Modwerk base 0.7.9 and the exact USB package are recorded in TESTING.md. No physical USB or reboot qualification.",
     "hardwareStatus": "untested",
     "gates": [
-      "verify_arpgen.py: engine, UI, storage and persistence in the emulator",
-      "verify_beta.py: runtime admission, replacement, Undo and removal in the emulator",
-      "test_port.py: fixed-seed reference engine equality and shared scale SDK compatibility"
+      "test_port.py: fixed-seed reference engine and separate shared-scale wrapper",
+      "test_runtime.py: shipped ColdFire ownership, WRITE, overlay, load-race and quantizer regressions",
+      "test_import.py: parser, retry and supersession regressions",
+      "verify.py --base/--package: firmware reference, UI/S2, stock MIDI, WRITE/reload, Kept restore and project changes"
     ],
-    "evidenceRevision": "46118bf15a80f8b8567ae541446fbd711727cabb"
+    "evidenceRevision": "5d079ee9a273af103d2970f65487518268b71ca5"
   },
   "license": {
     "spdx": "MIT",

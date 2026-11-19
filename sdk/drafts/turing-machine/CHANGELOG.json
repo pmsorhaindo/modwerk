@@ -3,9 +3,9 @@
     "version": "0.5.1-experimental",
     "date": "2026-11-19",
     "changes": [
-      "Ports Turing to a draft MIDI generator package for Modwerk base 0.7.9.",
-      "WRITE preserves Arp Key Locks data and follows stock pattern-save bookkeeping.",
-      "Protects legacy imports during loads and edits the displayed Part consistently.",
+      "Adds Turing phrases as a MIDI generator for Modwerk base 0.7.9.",
+      "WRITE keeps Arp Key Locks settings and saves its trigs with the project.",
+      "Legacy projects load safely; controls follow the displayed Part.",
       "Release FUNC before SCALE/ROOT; WRITE requires the uncovered main AMP page.",
       "Known issue: hardware and physical USB installation remain untested."
     ]
