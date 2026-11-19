@@ -675,7 +675,11 @@ def project_change(port, work):
         data=port.peek(0x46c7e0ea,1024)+port.peek(0x46c7d34c,280)
         data+=b''.join(port.peek(0x460d1f7b+i,min(4096,0x2800-i)) for i in range(0,0x2800,4096))
         lcd_view.png(lcd_view.screen(data),work/(name+'.png'))
-    v.project_menu(port,0);capture('change-list')
+    capture('before-change')
+    try:
+        v.project_menu(port,0)
+    finally:
+        capture('change-list')
     port.press('DOWN');port.press('YES');port.run(500);capture('change-answer')
     v.settle_card(port,at_least_ms=20000);port.press('NO');port.run(500)
     capture('change-loaded')
