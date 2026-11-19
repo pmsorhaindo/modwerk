@@ -661,7 +661,7 @@ def setup_tracks(port, tracks):
         port.press(track)
         port.press("FUNC", "SRC")
         port.run(300)
-        port.enc("A", -127)                 # channel OFF, including a cached project's old channel
+        port.enc("A", -120)                 # channel OFF; multiple of four leaves no partial detent
         for _ in range(channel):
             port.enc("A", 4)
         port.press("YES")
@@ -2362,6 +2362,7 @@ def reload_run(image, work):
                          for t,(name,ch,positions) in enumerate(wanted))
         setup_tracks(port, wanted)
         assert track_data(port,0)[0]&65535==0 and track_data(port,1)[0]&65535==65535, 'Reload grid fixture is not empty/full'
+        assert port.peek(0x46c76de0,1)==b'\x01' and port.peek(0x46c76de0+68,1)==b'\x02', 'Reload fixture channels are not 1 and 2'
         port.press("T1")
         page_tracks(port, {1: (True, 127, 16, 64, 64)})
         watch_midi_out(port)
