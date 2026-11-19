@@ -67,6 +67,7 @@ import functools
 import os
 import pathlib
 import selectors
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -2357,10 +2358,12 @@ def reload_run(image, work):
     cached = os.environ.get('TM_RELOAD_TREE')
     options = {}
     if cached:
-        tree = pathlib.Path(cached).resolve()
+        tree = work / 'input-tree'
+        shutil.copytree(pathlib.Path(cached).resolve(), tree)
         works = [f for f in tree.rglob('*') if f.name.lower()=='project.work']
         if len(works)!=1:raise ValueError('TM_RELOAD_TREE must contain one saved project')
         home=works[0].parent
+        (home.parent/'AUDIO').mkdir(exist_ok=True)
         options=dict(tree=tree,extra=('--mount','--set',home.parent.name,'--project',home.name))
     port = Port(image, work / "a", writable=True, **options)
     keys = {}
@@ -2393,6 +2396,7 @@ def reload_run(image, work):
         port.press("YES")
         settle_card(port,at_least_ms=8000)
         port.press("NO")
+        saved_bank = next(data for name,data in port.card_files().items() if name.lower().endswith('/bank01.work'))
         bank=int.from_bytes(port.peek(0x46c82456,4),'big')
         port.cmd(f'poke {bank+0x9b332:#x} 00000000')
         port.cmd('poke 0x100f8598 00000000')
@@ -2409,6 +2413,8 @@ def reload_run(image, work):
         port.press("YES")
         settle_card(port, at_least_ms=8000)
         port.press("NO")
+        written_bank = next(data for name,data in port.card_files().items() if name.lower().endswith('/bank01.work'))
+        check('WRITE and SAVE change the actual card bank file from the clean fixture',written_bank != saved_bank)
         keys["SAVE while playing"] = track_keys(port)
         port.press("STOP")
         port.run(400)
@@ -2447,6 +2453,7 @@ def reload_run(image, work):
         check("(5) reboot: one project.work on the saved card", False, f"{works}")
         return
     project_dir = works[0].parent
+    (project_dir.parent/'AUDIO').mkdir(exist_ok=True)
     port = Port(image, work / "b", tree=tree, extra=("--mount", "--set", project_dir.parent.name, "--project", project_dir.name))
     try:
         port.run(3000)
