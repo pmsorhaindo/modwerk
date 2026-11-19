@@ -1038,6 +1038,10 @@ static void tm_build(void) {
 static unsigned tm_shown(void) {
     uint32_t window = WORD(TM_UI_WINDOW);
     if (window && WORD(window + 8u)) return 0;
+    /* Menus/prompts use the LCD overlay table, not the SETUP pointer.
+     * A cached generator page must not WRITE through any covering window. */
+    for (unsigned i = 0; i < 5u; ++i)
+        if (WORD(TM_UI_OVERLAYS + 56u * i + 32u) & 0x20u) return 0;
     return tm_ui.page == 1u && *(volatile uint32_t *)TM_UI_MIDI &&
            *(volatile uint32_t *)TM_UI_PAGE == TM_PAGE_ARP && !WORD(0x460d173au) && !WORD(0x460d1694u) &&
            tm_selected(tm_part(tm_ui_bank_index(), BYTE(TM_CUR_PART) & 3u), tm_track());

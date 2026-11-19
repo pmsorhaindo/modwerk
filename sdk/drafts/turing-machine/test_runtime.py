@@ -193,6 +193,26 @@ class Runtime(unittest.TestCase):
         self.assertEqual(self.get(self.symbols['tm_ui']+24),0)
         self.assertNotIn(0x4005a2b8,self.calls)
 
+    def test_lcd_overlay_blocks_both_write_edges_without_a_setup_window(self):
+        self.select();self.cell()
+        self.uc.mem_write(self.symbols['tm_ui'],b'\x01')
+        self.put(0x80000012,1);self.put(0x460d1684,2)
+        for i in range(5):
+            flags = 0x46c7d34c + 56*i + 32
+            self.put(flags,0x20)
+            self.call('tm_push',0x38,1)
+            self.assertEqual(self.uc.mem_read(self.symbols['tm_ui']+3,1),b'\0')
+            self.call('tm_push',0x38,0)
+            self.put(flags,0)
+            # It may have been armed before the covering menu appeared.
+            self.uc.mem_write(self.symbols['tm_ui']+3,b'\x01')
+            self.put(flags,0x20)
+            self.call('tm_push',0x38,0)
+            self.put(flags,0)
+        self.assertEqual(self.get(self.symbols['tm_ui']+24),0)
+        self.assertNotIn(0x40027e00,self.calls)
+        self.assertNotIn(0x4005a2b8,self.calls)
+
     def test_cued_part_edit_reads_and_writes_displayed_part(self):
         self.select(part=0,lock=10);self.select(part=1,lock=90)
         self.uc.mem_write(0x100b14cf,b'\x01')

@@ -963,7 +963,10 @@ def dismiss_windows(port):
     """Return from covered stock windows before starting a panel fixture."""
     for _ in range(8):
         window=int.from_bytes(port.peek(0x400bcd14,4),'big')
-        if not window or not int.from_bytes(port.peek(window+8,4),'big'):
+        setup = window and int.from_bytes(port.peek(window+8,4),'big')
+        overlays = port.peek(0x46c7d34c,280)
+        covered = any(int.from_bytes(overlays[i+32:i+36],'big') & 0x20 for i in range(0,280,56))
+        if not setup and not covered:
             return
         port.press('NO')
     raise RuntimeError('Stock window still covers the requested page')

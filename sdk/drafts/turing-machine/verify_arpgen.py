@@ -626,6 +626,12 @@ def review_run(image,work):
         v.push_a(port)
         v.check('Encoder A push in NOTE SETUP does not WRITE',port.peek(ui+24,4)==writes)
         port.press('NO');open_turing(port)
+        port.press('MENU')
+        overlays=port.peek(0x46c7d34c,280)
+        assert any(int.from_bytes(overlays[i+32:i+36],'big') & 0x20 for i in range(0,280,56)), 'PROJECT menu must cover the page'
+        v.push_a(port)
+        v.check('Encoder A push under the PROJECT menu does not WRITE',port.peek(ui+24,4)==writes)
+        v.dismiss_windows(port);open_turing(port)
         part=current_part(port)
         settings=port.peek(part+0x1832,16)
         trans=port.peek(part+0x3e2+12,1)[0]

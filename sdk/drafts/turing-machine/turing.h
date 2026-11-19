@@ -185,6 +185,7 @@ typedef int (*TmWrite)(int file, const char *buffer, int length);
 #define TM_UI_MIDI 0x80000012u      /* long: nonzero in MIDI mode */
 #define TM_UI_PAGE 0x460d1684u      /* long: the current page kind; 2 = AMP (ARP) */
 #define TM_UI_WINDOW 0x400bcd14u    /* pointer: +8 nonzero while a window (a SETUP) shows */
+#define TM_UI_OVERLAYS 0x46c7d34cu  /* five stock LCD windows, 56 bytes; +32 bit 0x20 is visible */
 #define TM_UI_FUNC 0x46c7dd26u      /* long: FUNC held */
 #define TM_UI_PUSH 0x46c7d8eeu      /* key records, 24 bytes each: + (0x38 + slot) * 24 nonzero = encoder pushed */
 #define TM_KEY_PUSH_A 0x38u         /* encoder A pushed: 0x4004ecfc(code, 1) on the press, (code, 0) on the release */
