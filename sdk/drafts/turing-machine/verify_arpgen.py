@@ -10,6 +10,7 @@ import argparse
 import importlib.util
 import json
 import os
+import sys
 from pathlib import Path
 import tempfile
 
