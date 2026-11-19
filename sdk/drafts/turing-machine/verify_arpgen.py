@@ -506,6 +506,14 @@ def reference_arpgen_run(image,work,reference):
     for tag,candidate in (('reference',reference/'MAIN.raw'),('candidate',image)):
         port=v.Port(candidate,work/tag)
         captured=[]
+        def capture():
+            port.wire()
+            events=v.play_timed(port,4300)
+            wire=v.timed_notes(list(enumerate(port.wire())))
+            v.check(tag+' actual UART messages equal the timed queue capture',
+                    [(k,c,n,vel) for _,k,c,n,vel in wire]
+                    ==[(k,c,n,vel) for _,k,c,n,vel in events])
+            return events
         try:
             v.fixture(port,(('T1',1,()),('T2',2,range(1,17))))
             v.seed(port,0x13572468)
@@ -529,7 +537,7 @@ def reference_arpgen_run(image,work,reference):
                         port.peek(part+0x1832+4,2)==bytes(((scale-64)&255,(root-64)&255))
                         and port.peek(0x46c76dc0+12,1)==bytes((70,)))
                 v.watch_midi_out(port)
-                events=v.play_timed(port,4300)
+                events=capture()
                 own,grid=v.steps(events,0),v.steps(events,1)
                 v.check(tag+f' SCALE {scale} ROOT {root} has 32 notes on the stock grid',
                         len(own)>=32 and v.lockstep(own,grid)[0])
@@ -550,7 +558,7 @@ def reference_arpgen_run(image,work,reference):
                         (config['on'],config['lock'],config['length'],config['scale'],config['density'],config['bits'])
                         ==(1,lock,length,span,64,0x12345678beef0001),str(config))
                 v.watch_midi_out(port)
-                events=v.play_timed(port,4300)
+                events=capture()
                 own,grid=v.grid_steps(events,0,1)
                 phrase=tuple((i,*own[i]) for i in sorted(own) if i<32)
                 v.check(tag+f' unlocked LOCK {lock} LEN {length} SCAL {span} DENS 64 has notes and rests',
@@ -558,6 +566,7 @@ def reference_arpgen_run(image,work,reference):
                 captured.append(phrase)
         finally:
             port.quit()
+        (work/(tag+'-phrases.json')).write_text(json.dumps(captured,indent=2))
         phrases.append(captured)
     v.check('Fixed register/seed UART equality: OFF/four keys plus unlocked short loops, density and range extremes',
             len(phrases)==2 and phrases[0]==phrases[1] and all(len(p)==32 for p in phrases[1][:5]) and len(phrases[1])==9,str(phrases))
@@ -620,15 +629,13 @@ def review_run(image,work):
         state=(0x12345678beef0001,0x13572469)
         open_turing(port);port.enc('A',-4);port.enc('A',4)
         poke_cell(port,0,1,0,True,127,16,state,64,127)
-        print('TRAN fixture pre-PLAY:',port.peek(0x800065bd,2).hex(),cell(port,0,1,0),
-              'Part SRC',port.peek(part+0x3e2,18).hex(),flush=True)
         v.watch_midi_out(port);port.wire()
         first_events=v.play_timed(port,4300)
         first_wire=port.wire()
         before=[n for _,n,_ in v.onsets(first_events,0)]
-        print('TRAN before timed notes:',v.onsets(first_events,0),flush=True)
-        print('TRAN before UART wire:',first_wire.hex(),flush=True)
-        print('TRAN before wire notes:',v.track_ons(v.notes(first_wire),0),flush=True)
+        v.check('TRAN before: actual UART messages agree with queued capture',
+                [(k,c,n,vel) for _,k,c,n,vel in v.timed_notes(list(enumerate(first_wire)))]
+                ==[(k,c,n,vel) for _,k,c,n,vel in first_events])
         port.key('FUNC',True,60);port.enc('A',1);port.key('FUNC',False,60)
         changed=port.peek(part+0x3e2+12,1)[0]
         v.check('Held FUNC edits stock TRAN and leaves Turing Part settings unchanged',
@@ -639,13 +646,85 @@ def review_run(image,work):
         after_events=v.play_timed(port,4300)
         after_wire=port.wire()
         after=[n for _,n,_ in v.onsets(after_events,0)]
-        print('TRAN after timed notes:',v.onsets(after_events,0),flush=True)
-        print('TRAN after UART wire:',after_wire.hex(),flush=True)
-        print('TRAN after wire notes:',v.track_ons(v.notes(after_wire),0),flush=True)
+        v.check('TRAN after: actual UART messages agree with queued capture',
+                [(k,c,n,vel) for _,k,c,n,vel in v.timed_notes(list(enumerate(after_wire)))]
+                ==[(k,c,n,vel) for _,k,c,n,vel in after_events])
         v.check('Held-FUNC TRAN transposes the fixed generated phrase by one semitone',
                 len(before)>=32 and after==[n+1 for n in before],f'{before[:8]} / {after[:8]}')
     finally:
         port.quit()
+
+
+def lifecycle_run(image,work,kept_tree,legacy_tree):
+    """Real card writer, natural Kept restore, then PROJECT CHANGE to legacy.
+
+    --kept-tree is a saved one-project card tree; --legacy-tree supplies a
+    second saved stock project. Neither is checked into the repository.
+    """
+    import shutil
+    sys.path.insert(0,str(v.ROOT/'tools/emu'))
+    import emu_card
+    if kept_tree is None or legacy_tree is None:
+        raise ValueError('lifecycle requires --kept-tree and --legacy-tree')
+    def project(tree):
+        files=[f for f in tree.rglob('*') if f.name.lower()=='project.work']
+        if len(files)!=1:raise ValueError('fixture must contain one saved project')
+        return files[0].parent
+    work.mkdir()
+    home=project(kept_tree)
+    port=v.Port(image,work/'save',writable=True,tree=kept_tree,
+                extra=('--mount','--set',home.parent.name,'--project',home.name))
+    try:
+        expected=cell(port,0,0,0)
+        v.midi_mode(port);v.watch_midi_out(port)
+        before=v.bar_phrase(v.play_timed(port,4300))
+        v.check('Kept fixture has a repeatable saved phrase',bool(before))
+        package=v.runtime_package;address=0x41000000
+        for at in range(0,len(package),4096):port.cmd(f'poke {address+at:#x} {package[at:at+4096].hex()}')
+        call(port,'modwerk_modset_candidate',address,len(package))
+        call(port,'modwerk_modset_accepted')
+        v.check('Base accepted the exact package into its saved-set owner',
+                int.from_bytes(port.peek(v.elf_symbol('modwerk_modset_count'),4),'big')==1)
+        # The normal installed-backend fixture must wake its queue to service
+        # the card writer. The restoring boot below sends no such message.
+        wake=v.elf_symbol('core:wake_message')
+        port.cmd(f'call 0x40000c3c 0x460d17ce {wake:#x}')
+        v.settle_card(port,at_least_ms=8000)
+        v.check('Base saved the package set through its real card writer',
+                int.from_bytes(port.peek(v.elf_symbol('modwerk_modset_result'),4),'big')==7)
+    finally:port.quit()
+    tree=work/'tree'
+    emu_card.extract_image(port.card.read_bytes(),str(tree))
+    assert any(f.name.upper() in ('MODWERK0.SET','MODWERK1.SET') for f in tree.iterdir())
+    current=project(tree);legacy=current.parent/'PROJECT 000001'
+    shutil.copytree(project(legacy_tree),legacy)
+    saved=next(f for f in legacy.iterdir() if f.name.lower()=='project.work')
+    text=saved.read_text(encoding='latin1')
+    text='\r\n'.join(line for line in text.splitlines() if not line.startswith('#TURING_'))+'\r\n#TURING_T1=1,100,5\r\n'
+    saved.write_bytes(text.encode('latin1'))
+    # restore_only forbids backend publication and queue wake; the normal
+    # base startup must restore the set and deliver modules-ready itself.
+    port=v.Port(image,work/'restore',tree=tree,card_megabytes=128,restore_only=True,
+                extra=('--mount','--set',current.parent.name,'--project',current.name))
+    try:
+        v.check('Fresh boot restores Kept Turing without backend install or manual wake',
+                call(port,'modwerk_runtime_active')==1)
+        v.check('Natural modules-ready imports the saved state',
+                int.from_bytes(port.peek(v.elf_symbol('tm_ready_events'),4),'big')>=1
+                and int.from_bytes(port.peek(v.elf_symbol('tm_install_read_done'),4),'big')==1
+                and cell(port,0,0,0)==expected)
+        v.midi_mode(port);v.watch_midi_out(port)
+        after=v.bar_phrase(v.play_timed(port,4300))
+        v.check('Kept-set fresh boot retains the exact saved phrase',after==before and bool(before))
+        v.project_menu(port,0);port.press('DOWN');port.press('YES')
+        v.settle_card(port,at_least_ms=20000);port.press('NO');port.run(500)
+        pointer=int(port.cmd('call 0x40025230 0 0').split('d0=')[1],16)
+        directory=port.peek(pointer,256).split(b'\0',1)[0]
+        v.check('PROJECT CHANGE selected the second saved project',directory.endswith(b'PROJECT 000001'),repr(directory))
+        got=cell(port,0,0,0)
+        v.check('PROJECT CHANGE imports and migrates legacy settings',
+                (got['on'],got['lock'],got['length'],got['scale'],got['density'])==(1,100,5,64,127),str(got))
+    finally:port.quit()
 
 
 def main():
@@ -655,6 +734,8 @@ def main():
     parser.add_argument('--emulator', type=Path)
     parser.add_argument('--native', type=Path, default=Path(os.environ.get('TM_NATIVE',HERE.parents[1])))
     parser.add_argument('--symbols', type=Path)
+    parser.add_argument('--kept-tree',type=Path)
+    parser.add_argument('--legacy-tree',type=Path)
     parser.add_argument('--reference-image', type=Path)
     parser.add_argument('--reference-arpgen', type=Path)
     parser.add_argument('--output', type=Path)
@@ -675,7 +756,7 @@ def main():
     v.elf_symbol = lambda name: symbols['turing-machine:' + name]
     v.SETTINGS, v.TEST_SEED, v.RANDOM, v.CELLS = (v.elf_symbol(n) for n in
         ('tm_settings', 'tm_test_seed', 'tm_random_states', 'tm_cells'))
-    runs = {'review': review_run, 'stock': stock_contract_run, 'reference': lambda i,w: reference_arpgen_run(i,w,args.reference_arpgen), 'func': func_contract_run, 'storage': storage_run, 's2': s2_run, 'migration': migration_run,
+    runs = {'lifecycle':lambda i,w:lifecycle_run(i,w,args.kept_tree,args.legacy_tree),'review': review_run, 'stock': stock_contract_run, 'reference': lambda i,w: reference_arpgen_run(i,w,args.reference_arpgen), 'func': func_contract_run, 'storage': storage_run, 's2': s2_run, 'migration': migration_run,
             'key': lambda i,w: key_reference_run(i,w,args.reference_image),
             'replace': v.replace_run, 'locks': v.locks_run, 'nei': v.nei_run,
             'range': v.range_run, 'lfo': v.lfo_run, 'clock': v.clock_run, 'live': v.live_length_run,

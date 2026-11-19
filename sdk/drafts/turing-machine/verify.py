@@ -109,7 +109,7 @@ def check(name, ok, detail=""):
 class Port:
     """ot_emu --interactive on a scratch card (tools/emu/ot_emu/main.cpp)."""
 
-    def __init__(self, image, work, writable=False, tree=None, extra=()):
+    def __init__(self, image, work, writable=False, tree=None, extra=(), card_megabytes=32):
         sys.path.insert(0, str(ROOT / "tools/emu"))
         import emu_card
         work.mkdir()
@@ -117,7 +117,7 @@ class Port:
         if tree is None:
             tree = work / "tree"
             tree.mkdir()
-        card.write_bytes(emu_card.build_image(str(tree), 32))
+        card.write_bytes(emu_card.build_image(str(tree), card_megabytes))
         cmd = [str(EMU), "--image", str(image), "--card", str(card), "--dsp", "--frame", "--ms", "3000",
                "--interactive", "--main-level", "off", "--rtc", "off", "--mkii"] + (["--card-rw"] if writable else []) + list(extra)
         self.p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,

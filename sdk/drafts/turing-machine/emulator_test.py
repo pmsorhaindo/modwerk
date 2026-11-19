@@ -46,6 +46,8 @@ def main():
         parser.add_argument('--'+name,type=Path,required=True)
     parser.add_argument('--runs',default='stock,func,storage,s2,migration,replace,locks,nei,range,lfo,clock,model,lock,live,fresh,scale,density,write,flags,toggle,pattern,timer,reload,oldlines')
     parser.add_argument('--reference-image',type=Path)
+    parser.add_argument('--kept-tree',type=Path)
+    parser.add_argument('--legacy-tree',type=Path)
     parser.add_argument('--companion',type=Path,action='append',default=[])
     parser.add_argument('--reference-arpgen',type=Path)
     args = parser.parse_args()
@@ -57,12 +59,14 @@ def main():
     base = json.loads((args.base/'symbols.json').read_text())
     package = args.package.read_bytes()
     offsets = module_symbols(package)
+    v.runtime_package = package
     initial = {'turing-machine:'+k:value for k,value in {**base,**offsets}.items()}
     init_symbols = args.output/'initial-symbols.json'
     init_symbols.write_text(json.dumps(initial))
     original_port = v.Port
     class InstalledPort(original_port):
         def __init__(self,image,*pos,**kw):
+            restore_only = kw.pop("restore_only",False)
             kw["extra"] = (*kw.get("extra",()), "--max", "250000000")
             super().__init__(image,*pos,**kw)
             if Path(image).resolve() != args.base/'MAIN.raw':
@@ -77,26 +81,28 @@ def main():
             def invoke(fn,*values):
                 reply = self.cmd('call '+hex(fn)+''.join(' '+hex(x) for x in values))
                 return int(reply.split('d0=')[1],16)
-            address = 0x41000000
-            for at in range(0,len(package),4096):
-                self.cmd(f'poke {address+at:#x} {package[at:at+4096].hex()}')
-            for index,values in ((1,(0,)),(4,(0,address,len(package))),(6,(0,))):
-                result=invoke(backend[index],*values)
-                if result != 1:
-                    refusal=invoke(base['modwerk_runtime_refusal'])
-                    self.quit()
-                    raise RuntimeError(f'Runtime backend stage {index} refused {refusal}')
-            assert invoke(backend[8],0) == invoke(backend[3],0) == 1
-            for companion in args.companion:
-                data=companion.resolve().read_bytes()
-                for at in range(0,len(data),4096):
-                    self.cmd(f'poke {address+at:#x} {data[at:at+4096].hex()}')
-                for index,values in ((1,(0,)),(4,(0,address,len(data))),(6,(0,))):
-                    if invoke(backend[index],*values)!=1:
+            if not restore_only:
+                address = 0x41000000
+                for at in range(0,len(package),4096):
+                    self.cmd(f'poke {address+at:#x} {package[at:at+4096].hex()}')
+                for index,values in ((1,(0,)),(4,(0,address,len(package))),(6,(0,))):
+                    result=invoke(backend[index],*values)
+                    if result != 1:
+                        refusal=invoke(base['modwerk_runtime_refusal'])
                         self.quit()
-                        raise RuntimeError(f'Companion backend stage {index} refused')
+                        raise RuntimeError(f'Runtime backend stage {index} refused {refusal}')
                 assert invoke(backend[8],0) == invoke(backend[3],0) == 1
+                for companion in args.companion:
+                    data=companion.resolve().read_bytes()
+                    for at in range(0,len(data),4096):
+                        self.cmd(f'poke {address+at:#x} {data[at:at+4096].hex()}')
+                    for index,values in ((1,(0,)),(4,(0,address,len(data))),(6,(0,))):
+                        if invoke(backend[index],*values)!=1:
+                            self.quit()
+                            raise RuntimeError(f'Companion backend stage {index} refused')
+                    assert invoke(backend[8],0) == invoke(backend[3],0) == 1
             record=invoke(base['modwerk_runtime_module'],0)
+            assert record and self.peek(record,4) == package[28:32], 'Kept Turing was not restored'
             descriptor=int.from_bytes(self.peek(record+8+4*31,4),'big')
             origin=descriptor-offsets['tm_generator']
             resolved={k:origin+value for k,value in offsets.items()}
@@ -109,11 +115,12 @@ def main():
             # Use its actual inert message (ep0.c), so the unmodified engine
             # idle path restores the set, then raises modules-ready. A second
             # wake covers a boot whose first service only finishes restoration.
-            wake = base['core:wake_message']
-            assert self.peek(wake, 4) == b'\xff\0\0\0'
-            for _ in range(2):
-                invoke(0x40000c3c, 0x460d17ce, wake)
-                self.run(500)
+            if not restore_only:
+                wake = base['core:wake_message']
+                assert self.peek(wake, 4) == b'\xff\0\0\0'
+                for _ in range(2):
+                    invoke(0x40000c3c, 0x460d17ce, wake)
+                    self.run(500)
             assert int.from_bytes(self.peek(resolved['tm_ready_events'], 4), 'big') >= 1, \
                 'The base engine did not deliver modules-ready'
     v.Port=InstalledPort
@@ -124,6 +131,10 @@ def main():
         sys.argv += ['--reference-image',str(args.reference_image.resolve())]
     if args.reference_arpgen:
         sys.argv += ["--reference-arpgen",str(args.reference_arpgen.resolve())]
+    for name in ('kept_tree','legacy_tree'):
+        path=getattr(args,name)
+        if path:
+            sys.argv += ['--'+name.replace('_','-'),str(path.resolve())]
     a.main()
 if __name__ == '__main__':
     main()
