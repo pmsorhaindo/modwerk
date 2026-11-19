@@ -581,6 +581,7 @@ def main():
     args.reference_image = args.reference_image.resolve() if args.reference_image else None
     args.output = args.output.resolve() if args.output else None
     v.ROOT, v.EMU = args.native.resolve(), args.emulator.resolve()
+    v.STOCK = v.ROOT / 'out/raw/section_3_MAIN_OS.bin'
     v.open_turing, v.page_tracks, v.poke_cell, v.cell = open_turing, page_tracks, poke_cell, cell
     v.write_trigs = write_trigs
     symbols = json.loads(args.symbols.read_text())

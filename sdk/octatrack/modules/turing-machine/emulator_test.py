@@ -53,7 +53,6 @@ def main():
     args.output.mkdir(parents=True,exist_ok=True)
     a = load('turing_arpgen_gate',HERE/'verify_arpgen.py')
     v = a.v
-    v.STOCK = args.native / "out/raw/section_3_MAIN_OS.bin"
     base = json.loads((args.base/'symbols.json').read_text())
     package = args.package.read_bytes()
     offsets = module_symbols(package)
