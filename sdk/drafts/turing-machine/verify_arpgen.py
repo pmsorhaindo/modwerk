@@ -684,8 +684,13 @@ def lifecycle_run(image,work,kept_tree,legacy_tree):
         if len(files)!=1:raise ValueError('fixture must contain one saved project')
         return files[0].parent
     work.mkdir()
-    home=project(kept_tree)
-    port=v.Port(image,work/'save',writable=True,tree=kept_tree,
+    # emu_card.extract_image retains files only. Restore the empty AUDIO
+    # directory stock uses to recognize a SET before testing its menus.
+    prepared=work/'input-tree'
+    shutil.copytree(kept_tree,prepared)
+    home=project(prepared)
+    (home.parent/'AUDIO').mkdir(exist_ok=True)
+    port=v.Port(image,work/'save',writable=True,tree=prepared,
                 extra=('--mount','--set',home.parent.name,'--project',home.name))
     try:
         expected=cell(port,0,0,0)
@@ -710,6 +715,7 @@ def lifecycle_run(image,work,kept_tree,legacy_tree):
     emu_card.extract_image(port.card.read_bytes(),str(tree))
     assert any(f.name.upper() in ('MODWERK0.SET','MODWERK1.SET') for f in tree.iterdir())
     current=project(tree);legacy=current.parent/'PROJECT 000001'
+    (current.parent/'AUDIO').mkdir(exist_ok=True)
     shutil.copytree(project(legacy_tree),legacy)
     saved=next(f for f in legacy.iterdir() if f.name.lower()=='project.work')
     text=saved.read_text(encoding='latin1')
