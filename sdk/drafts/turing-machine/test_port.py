@@ -35,6 +35,7 @@ class PortChecks(unittest.TestCase):
                 text=(source/'turing.c').read_text().split('/* ---- per-pattern cells')[0]
                 text=text.replace('#include "turing.h"','#include "'+str(source/'turing.h')+'"')
                 text=text.replace('#include "modwerk_events.h"','')
+                text=text.replace('#include "../../../machines/octatrack/include/modwerk_events.h"','')
                 text += '\nTmGlobals tm_globals; volatile TmSettings tm_settings; volatile TmTestSeed tm_test_seed;\n'
                 text += 'void test_seed(uint32_t seed) { tm_globals.seed=seed; tm_globals.seeded=1; }\n'
                 c=work/(name+'.c'); c.write_text(text)
