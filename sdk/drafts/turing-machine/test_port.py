@@ -17,7 +17,7 @@ import tempfile
 import unittest
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[3]
+ROOT = next(p for p in HERE.parents if (p / 'sdk/runtime/loader/build.py').is_file())
 sys.path.insert(0,str(ROOT/'sdk/tests'))
 REFERENCE = Path(os.environ['TURING_REFERENCE_DIR']) if os.environ.get('TURING_REFERENCE_DIR') else None
 
@@ -34,7 +34,7 @@ class PortChecks(unittest.TestCase):
             for name,source in (('reference',REFERENCE),('candidate',HERE)):
                 text=(source/'turing.c').read_text().split('/* ---- per-pattern cells')[0]
                 text=text.replace('#include "turing.h"','#include "'+str(source/'turing.h')+'"')
-                text=text.replace('#include "../../../machines/octatrack/include/modwerk_events.h"','')
+                text=text.replace('#include "modwerk_events.h"','')
                 text += '\nTmGlobals tm_globals; volatile TmSettings tm_settings; volatile TmTestSeed tm_test_seed;\n'
                 text += 'void test_seed(uint32_t seed) { tm_globals.seed=seed; tm_globals.seeded=1; }\n'
                 c=work/(name+'.c'); c.write_text(text)
@@ -77,7 +77,7 @@ class PortChecks(unittest.TestCase):
             work=Path(folder)
             wrapper=work/'wrapper.o'; shared=work/'shared.o'
             subprocess.run(['m68k-elf-gcc','-mcpu=54455','-msoft-float','-O2','-ffreestanding','-fno-builtin',
-                            '-fno-asynchronous-unwind-tables','-fno-ident','-c',str(HERE/'scale.c'),'-o',str(wrapper)],check=True)
+                            '-fno-asynchronous-unwind-tables','-fno-ident','-I'+str(ROOT/'sdk/machines/octatrack/include'),'-c',str(HERE/'scale.c'),'-o',str(wrapper)],check=True)
             subprocess.run(['m68k-elf-as','-mcpu=54455',str(ROOT/'sdk/machines/octatrack/modwerk_scale.s'),'-o',str(shared)],check=True)
             image,syms,_,_=builder.link_units([wrapper,shared],'m68k-elf-',0x10000,work,anywhere=True)
             uc=Uc(UC_ARCH_M68K,UC_MODE_BIG_ENDIAN); uc.ctl_set_cpu_model(m.UC_CPU_M68K_CFV4E)

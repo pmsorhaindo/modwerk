@@ -6,14 +6,14 @@ import subprocess
 import sys
 import tempfile
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[3]
+ROOT = next(p for p in HERE.parents if (p / 'sdk/runtime/loader/build.py').is_file())
 spec = importlib.util.spec_from_file_location('turing_codegen', ROOT / 'sdk/runtime/m68k_codegen.py')
 codegen = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(codegen)
 FLAGS = ['-mcpu=54455', '-msoft-float', '-O2', '-ffreestanding', '-fno-builtin',
          '-fno-common', '-fno-jump-tables', '-fno-asynchronous-unwind-tables',
          '-fno-ident', '-fomit-frame-pointer', '-fno-tree-loop-distribute-patterns',
-         '-fno-auto-inc-dec', *codegen.FLAGS]
+         '-fno-auto-inc-dec', *codegen.FLAGS, '-I'+str(ROOT/'sdk/machines/octatrack/include')]
 def generate():
     with tempfile.TemporaryDirectory() as folder:
         asm, obj = Path(folder) / 'turing.s', Path(folder) / 'turing.o'

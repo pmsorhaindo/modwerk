@@ -8,7 +8,7 @@
  * library calls). Compile to the checked-in ColdFire assembly with
  * generate.py. */
 #include "turing.h"
-#include "../../../machines/octatrack/include/modwerk_events.h"
+#include "modwerk_events.h"
 
 _Static_assert(sizeof(TmState) == 16, "register state");
 _Static_assert(sizeof(TmGlobals) == 8, "hooks.s globals allocation");

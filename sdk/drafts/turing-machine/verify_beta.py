@@ -86,7 +86,7 @@ def run(args):
         invoke(backend[8],0)
         invoke(backend[3],0)
         # Build the SDK's own empty removal package; do not forge wire records.
-        builder_path = HERE.parents[2] / 'runtime/loader/build.py'
+        builder_path = next(p for p in HERE.parents if (p / 'sdk/runtime/loader/build.py').is_file()) / 'sdk/runtime/loader/build.py'
         spec = importlib.util.spec_from_file_location('turing_runtime_builder',builder_path)
         builder = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(builder)

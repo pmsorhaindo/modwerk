@@ -4,7 +4,7 @@
  * After TRAN, these scales snap down one semitone. At note zero the SDK
  * searches upward inside MIDI range; preserve Turing's historical drop.
  */
-#include "../../../machines/octatrack/include/modwerk_scale.h"
+#include "modwerk_scale.h"
 int tm_scale_snap(int note, unsigned scale, unsigned root) {
     if (note < 0 || note > 127)
         return -1;

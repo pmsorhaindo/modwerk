@@ -93,7 +93,7 @@ Part changes under load, runtime replacement, removal while playing, and physica
 Build locally with the repository's pinned Elekloader checkout; output stays outside Git:
 
 ```sh
-python3.11 -B sdk/octatrack/modules/turing-machine/generate.py --check
+python3.11 -B sdk/drafts/turing-machine/generate.py --check
 npm run module:dev -- turing-machine --build-only --out /private/turing-machine.mwrm
 ```
 

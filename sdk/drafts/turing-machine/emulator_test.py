@@ -15,7 +15,7 @@ import sys
 import tempfile
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[3]
+ROOT = next(p for p in HERE.parents if (p / 'sdk/runtime/loader/build.py').is_file())
 def load(name, path):
     spec = importlib.util.spec_from_file_location(name,path)
     module = importlib.util.module_from_spec(spec)
