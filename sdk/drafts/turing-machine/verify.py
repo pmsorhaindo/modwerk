@@ -964,6 +964,17 @@ def dismiss_windows(port):
     raise RuntimeError('Stock window still covers the requested page')
 
 
+def mounted_startup(port):
+    """Acknowledge stock's startup OK prompt on an emulator-mounted card.
+
+    --mount/--set/--project loads the fixture before startup finishes, but
+    the stock NO SET IS MOUNTED prompt can still cover its input layer.
+    This is only for a new mounted boot, never an arbitrary confirmation.
+    """
+    port.press('YES')
+    port.press('NO')
+
+
 def project_menu(port, downs):
     """PROJ > PROJECT list item `downs` rows below CHANGE (SAVE 1, RELOAD 2, the set's CHANGE 6)."""
     dismiss_windows(port)
@@ -2347,6 +2358,8 @@ def reload_run(image, work):
     keys = {}
     try:
         port.run(1000)
+        if cached:
+            mounted_startup(port)
         port.press("NO")
         if not cached:
             new_project(port)
@@ -2434,6 +2447,7 @@ def reload_run(image, work):
         check("(5) a fresh boot of the saved card loads A01's T1 cell as saved (ON 127, LEN 16, DENS 64, the register)",
               (booted["seeded"], booted["bits"], booted["on"], booted["lock"], booted["length"], booted["density"])
               == (1, anchor["bits"], 1, 127, 16, 64), f"{booted} vs {anchor}")
+        mounted_startup(port)
         midi_mode(port)
         keys["boot load"] = track_keys(port)
         watch_midi_out(port)

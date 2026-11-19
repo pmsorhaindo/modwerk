@@ -720,6 +720,7 @@ def lifecycle_run(image,work,kept_tree,legacy_tree):
                 int.from_bytes(port.peek(v.elf_symbol('tm_ready_events'),4),'big')>=1
                 and int.from_bytes(port.peek(v.elf_symbol('tm_install_read_done'),4),'big')==1
                 and cell(port,0,0,0)==expected)
+        v.mounted_startup(port)
         v.midi_mode(port);v.watch_midi_out(port)
         after=v.bar_phrase(v.play_timed(port,4300))
         v.check('Kept-set fresh boot retains the exact saved phrase',after==before and bool(before))
