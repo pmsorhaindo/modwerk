@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: Elastic-2.0
+# Copyright (c) 2026 Jannik Aßfalg (repeat98)
+name: Notify Stewart of new issues
+# GitHub's built-in issue webhooks cannot send an Authorization header, so this workflow posts a small JSON
+# summary of a newly opened issue straight to the Grok Bot "New issue triage" routine webhook instead, with
+# the key as a bearer token, so Michael's project steward ("Stewart") can triage it onto the Projects board.
+# It never sends the issue body, and never prints the webhook URL or key to the log.
+on:
+  issues:
+    types: [opened]
+permissions: {}
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: POST an issue summary to Stewart's webhook
+        env:
+          URL: ${{ secrets.GROK_ISSUE_WEBHOOK_URL }}
+          KEY: ${{ secrets.GROK_ISSUE_WEBHOOK_KEY }}
+          REPO: ${{ github.event.repository.full_name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
+        run: |
+          # Not set yet, or a fork with no access to these secrets: skip quietly rather than failing the run.
+          if [ -z "$URL" ] || [ -z "$KEY" ]; then
+            echo "::notice::GROK_ISSUE_WEBHOOK_URL or GROK_ISSUE_WEBHOOK_KEY is empty; skipping the Stewart notification."
+            exit 0
+          fi
+          # Every event field reaches jq through an environment variable above, never interpolated into this
+          # script, so an issue title cannot inject shell or JSON. The issue body is deliberately left out.
+          BODY=$(jq -n \
+            --arg repo "$REPO" \
+            --argjson number "$ISSUE_NUMBER" \
+            --arg title "$ISSUE_TITLE" \
+            --arg url "$ISSUE_URL" \
+            --arg author "$ISSUE_AUTHOR" \
+            '{context: ("New issue opened on " + $repo + ": #" + ($number | tostring) + " " + $title),
+              event: "issues", action: "opened", repository: $repo,
+              issue: {number: $number, title: $title, url: $url, author: $author}}')
+          curl --fail-with-body -sS --max-time 15 --retry 2 -X POST "$URL" \
+            -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" --data "$BODY"
